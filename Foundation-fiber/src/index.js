@@ -27,11 +27,16 @@ class App extends React.Component {
 }
 
 // <div>hello world</div> 是 DomComponent的代表
-console.log(React.createElement('App', { id: 'app' }));
+// console.log(React.createElement('App', { id: 'app' }));
 // ReactDom.render(<div>hello world</div>, document.querySelector('#app'));
 
 // TextComponent 的代表
-ReactDom.render('helllo  world', document.querySelector('#app'));
+ReactDom.render(<div
+  style={{ 
+    color: '#ff8000',
+    fontSize: '33px',
+    fontFamily: 'PingFangSC-Medium'
+}}>hello, world</div>, document.querySelector('#app'));
 
 // instance 
 // new App()  
