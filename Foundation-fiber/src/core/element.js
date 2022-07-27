@@ -42,7 +42,7 @@ function createElement(type, config, children) {
     if (childrenLenth > 1) {
         props.children = [].slice.call(arguments, 2);
     } else if (childrenLenth === 1) {
-        // 长度 = 1
+        // 长度 = 1 直接赋值
         props.children = children;
     }
 
