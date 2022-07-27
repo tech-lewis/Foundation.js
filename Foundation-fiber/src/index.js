@@ -10,14 +10,13 @@ import _ from './js/loadsh'
 //   }, " hello world "), document.querySelector('#app'));
 
 
-// Component在源码中其实是有3种类型
+// Component在源码中其实是有3种类型： DOM/Text字符串/Composite Component复合组件 比如App组件为类组件
 
 // App是 CompositeComponent 代表
 class App extends React.Component {
     constructor() {
         super();
         state = {
-            
         }
     }
 
@@ -38,7 +37,7 @@ ReactDom.render(<div
     fontFamily: 'PingFangSC-Medium'
 }}>hello, world</div>, document.querySelector('#app'));
 
-// instance 
+// instance 创建3种类型的component
 // new App()  
 
 // 1. ReactDom.render
