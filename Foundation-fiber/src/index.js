@@ -1,9 +1,8 @@
-// Component在源码中其实是有3种类型： DOM/Text字符串/Composite Component复合组件 比如App组件为类组件
-// instance 创建3种类型的component
-// new App()  
+// 分析以下，咱们需要实现哪些核心方法  可以实现react的渲染
 
-// 1. ReactDom.render======>render不依赖ReactDom的方法
-// 2. React.createElement
-// 3. React.Component   渲染满足
-// 4. 更新  
-// 5
+// 1. render 渲染入口
+// 2. createElement  创建 element对象 
+// 3. Component   组件类
+// 4. setState   更新 
+
+//  0 - > 1 React
