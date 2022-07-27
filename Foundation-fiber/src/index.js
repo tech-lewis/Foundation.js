@@ -3,7 +3,7 @@ import ReactDom from 'react-dom';
 import _ from './js/loadsh'
 
 // element  React.createElement 的返回值 就是element这样一个概念.
-
+// render函数返回的是一个对象，而不是真正的DOM节点
 // jsx
 // ReactDom.render(React.createElement("div", {
 //     id: "haha"
