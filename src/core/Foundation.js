@@ -153,7 +153,7 @@ function applyFilters (value, directive) {
 }
 export default {
   create: function (opts) {
-    return new uikit(opts)
+    return new UIKit(opts)
   },
   filters: Filters,
   directives: Directives
