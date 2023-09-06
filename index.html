@@ -6,8 +6,8 @@
   </head>
   <body>
 		<div id="test" x-on-click="changeMessage | .button">
-      <p x-text="msg | capitalize"></p>
-      <p x-show="something">YOYOYO</p>
+      <p>YOYO</p>
+      <p x-show="something">{{msg}}</p>
       <button class="button" x-text="msg"></button>
       <p x-class-red="error" x-text="hello"></p>
     </div>

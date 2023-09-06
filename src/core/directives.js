@@ -17,7 +17,7 @@ export default {
       if (handlers[event]) {
         el.removeEventListener(event, handlers[event])
       }
-      if (handler) {
+      if (handler && handler.bind) {
         handler = handler.bind(el)
         el.addEventListener(event, handler)
         handlers[event] = handler
@@ -31,8 +31,8 @@ export default {
     customFilter: function (handler, selectors) {
       return function (e) {
         var match = selectors.every(function (selector) {
-          console.log(match)
-          console.log(e.target)
+          // console.log(match)
+          // console.log(e.target)
           if (e.target.webkitMatchesSelector) {
             return e.target.webkitMatchesSelector(selector)
           } else if (e.target.msMatchesSelector) {

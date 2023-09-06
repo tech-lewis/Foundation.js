@@ -1,6 +1,11 @@
 export default {
-	prefix: 'sd',
-	controllers: {},
-	datum: {},
-	seeds: {}
+  prefix: 'x',
+  controllers: {},
+  datum: {},
+  seeds: {},
+  // 语法
+  interpolateTags: {
+    open: '{{',
+    close: '}}'
+  }
 }

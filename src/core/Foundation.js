@@ -1,22 +1,24 @@
+import TextParser from './text-parser'
 import Directives from './directives'
-// import Directive from './directive'
+import Config from './config'
+import Directive from './directive'
 import Filters from './filters'
+
 var prefix = 'x'
 var selector = Object.keys(Directives).map(function (d) {
   return '[' + prefix + '-' + d + ']'
 }).join()
 
 function UIKit (opts) {
-
+  TextParser.buildRegex()
   var self = this
   var root = this.el = document.getElementById(opts.id)
   var els = root.querySelectorAll(selector)
-
   var bindings = self._bindings = {} // 内部数据
   self.scope = {} // 外部接口参数
 
-  // 处理节点的指令
-  ;[].forEach.call(els, processNode)
+    // 处理节点的指令
+    ;[].forEach.call(els, processNode)
   processNode(root)
 
   // 处理所有变量 invoking setters
@@ -25,6 +27,9 @@ function UIKit (opts) {
   }
 
   function processNode (el) {
+    // console.log('当前的', el.childNodes.length)
+    console.log(el)
+    self.compileNode(el, true)
     cloneAttributes(el.attributes).forEach(function (attr) {
       var directive = parseDirective(attr)
       if (directive) {
@@ -34,6 +39,33 @@ function UIKit (opts) {
   }
 }
 
+UIKit.prototype.compileNode = function (node, root) {
+  // 只处理当前的
+  if (node.childNodes.length === 1) {
+    this._compileTextNode(node)
+  }
+}
+// 处理文本节点
+UIKit.prototype._compileTextNode = function (node) {
+  var tokens = TextParser.parse(node)
+  if (!tokens) return
+  var seed = this
+  console.log(node)
+  tokens.forEach(function (token) {
+    var el = document.createTextNode(seed.scope[tokens[0].key])
+    if (token.key) {
+      var directive = Directive.parse(Config.prefix + '-text', token.key)
+      if (directive) {
+        directive.el = el
+        seed._bind(directive)
+      }
+    } else {
+      el.nodeValue = token
+    }
+    node.parentNode.insertBefore(el, node)
+  })
+  node.parentNode.removeChild(node)
+}
 UIKit.prototype.dump = function () {
   var data = {}
   for (var key in this._bindings) {
@@ -113,7 +145,6 @@ function bindAccessors (uikit, key, binding) {
 }
 
 function parseDirective (attr) {
-
   if (attr.name.indexOf(prefix) === -1) return
   // parse directive name and argument
   var noprefix = attr.name.slice(prefix.length + 1)
