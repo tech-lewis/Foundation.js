@@ -17,7 +17,7 @@ export default {
       if (handlers[event]) {
         el.removeEventListener(event, handlers[event])
       }
-      if (handler) {
+      if (handler && handler.bind) {
         handler = handler.bind(el)
         el.addEventListener(event, handler)
         handlers[event] = handler
