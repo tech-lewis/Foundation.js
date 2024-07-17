@@ -10,5 +10,5 @@ TODO list
 - parse textNodes
 - make MVVM compositable
 - formatter arguments
-- Seed.extend()
+- extend()
 - options to pass in templates to Seed.create()
