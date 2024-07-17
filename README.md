@@ -11,4 +11,3 @@ TODO list
 - make MVVM compositable
 - formatter arguments
 - extend()
-- options to pass in templates to Seed.create()
