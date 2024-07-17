@@ -1,32 +1,634 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <title></title>
-  </head>
-  <body>
-		<div id="test" x-on-click="changeMessage | .button">
-      <p x-text="msg | capitalize"></p>
-      <p x-show="something">YOYOYO</p>
-      <button class="button" x-text="msg"></button>
-      <p x-class-red="error" x-text="hello"></p>
-    </div>
-    <script src="dist/build.js"></script>
-    <script>
-      var app = UIKit.create({
-        id: 'test',
-        // template
-        scope: {
-          msg: 'hello',
-          hello: 'Power by Foundation JS',
-          something: true,
-          changeMessage: function () {
-              app.scope.msg = 'clicked hello'
-              app.scope.something = false
-              alert('click')
+<html>
+<head>
+  <title>Array Reactive System</title>
+</head>
+<body>
+  <div id="app">
+    <my-component></my-component>
+    <input type="text" v-model="message" />
+    <p>{{ message }}</p>
+    <ul>
+      <li v-for="item in items">{{ item }}</li>
+    </ul>
+    <button v-bind:click="addItem">Add Item</button>
+    <button @click="logMessage">Log Message</button>
+    <button @click="toggleVisibility">Toggle Visibility</button>
+    <p v-show="isVisible">This paragraph 测试v-show指令.</p>
+  </div>
+
+  <script>
+
+    // 组件化
+    function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+    var Component = function Component(options) {
+      _classCallCheck(this, Component);
+      this.template = options.template;
+      this.data = typeof options.data === 'function' ? options.data() : options.data;
+      this.methods = options.methods;
+    };
+
+    var components = {};
+
+    function registerComponent(name, options) {
+      components[name] = new Component(options);
+    }
+
+    // 这个函数将对象的属性定义为响应式的，通过Object.defineProperty拦截属性的get和set操作，关联依赖收集和通知更新。
+    function defineReactive(obj, key, val) {
+      var dep = new Dep();
+      var childOb = observe(val); // 递归观察
+
+      Object.defineProperty(obj, key, {
+        get: function() {
+          if (Dep.target) {
+            dep.depend();
+            if (childOb) {
+              childOb.dep.depend();
+              if (Array.isArray(val)) {
+                dependArray(val);
+              }
+            }
+          }
+          return val;
+        },
+        set: function(newVal) {
+          if (newVal !== val) {
+            val = newVal;
+            childOb = observe(newVal); // 递归观察新值
+            dep.notify();
           }
         }
-      })
-    </script>
-  </body>
+      });
+    }
+
+    function Dep() {
+      this.subscribers = [];
+    }
+    //Dep是一个依赖收集器，当属性发生变化时，通知所有依赖更新。Dep.target用于存储当前的Watcher，以便在get时收集依赖。
+    Dep.target = null;
+
+    Dep.prototype.depend = function() {
+      if (Dep.target && this.subscribers.indexOf(Dep.target) === -1) {
+        this.subscribers.push(Dep.target);
+      }
+    };
+
+    Dep.prototype.notify = function() {
+      var subs = this.subscribers.slice();
+      for (var i = 0; i < subs.length; i++) {
+        subs[i]();
+      }
+    };
+    "use strict";
+    // observe函数用于观察对象或数组，递归调用defineReactive来处理每个属性或数组元素。
+    function observe(obj) {
+      if (Array.isArray(obj)) {
+        augmentArray(obj);
+      } else if (typeof obj === 'object' && obj !== null) {
+        for (var key in obj) {
+          if (obj.hasOwnProperty(key)) {
+            defineReactive(obj, key, obj[key]);
+          }
+        }
+      }
+      return obj.__ob__;
+    }
+
+    // 这个函数增强了数组的原型方法，使得数组的变更操作（如push、pop等）能够触发依赖更新。
+    function augmentArray(array) {
+      var arrayProto = Array.prototype;
+      var arrayMethods = Object.create(arrayProto);
+      var methodsToPatch = [
+        'push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse'
+      ];
+
+      methodsToPatch.forEach(function(method) {
+        var original = arrayProto[method];
+        Object.defineProperty(arrayMethods, method, {
+          value: function mutator() {
+            var args = [].slice.call(arguments);
+            var result = original.apply(this, args);
+            var ob = this.__ob__;
+            var inserted;
+            switch (method) {
+              case 'push':
+              case 'unshift':
+                inserted = args;
+                break;
+              case 'splice':
+                inserted = args.slice(2);
+                break;
+            }
+            // 递归观察数组的每个元素。
+            if (inserted) observeArray(inserted);
+            ob.dep.notify();
+            return result;
+          },
+          enumerable: false,
+          writable: true,
+          configurable: true
+        });
+      });
+
+      Object.defineProperty(array, '__ob__', {
+        value: {
+          dep: new Dep()
+        },
+        enumerable: false,
+        writable: true,
+        configurable: true
+      });
+
+      array.__proto__ = arrayMethods;
+    }
+
+    function observeArray(items) {
+      for (var i = 0; i < items.length; i++) {
+        observe(items[i]);
+      }
+    }
+    // 确保数组中的每个元素都能被正确依赖。
+    function dependArray(value) {
+      for (var e, i = 0, l = value.length; i < l; i++) {
+        e = value[i];
+        e && e.__ob__ && e.__ob__.dep.depend();
+        if (Array.isArray(e)) {
+          dependArray(e);
+        }
+      }
+    }
+    // 这个函数解析模板指令（如v-model和v-for），并设置相应的事件监听和观察者。
+    function compile(node, vm) {
+      if (node.nodeType === 1) { // 元素节点
+        var tagName = node.tagName.toLowerCase();
+        if (components[tagName]) {
+          var component = components[tagName];
+          var data = typeof component.data === 'function' ? component.data() : component.data;
+          observe(data);
+          var methods = component.methods;
+
+          var componentVm = {};
+          for (var key in data) {
+            if (data.hasOwnProperty(key)) {
+              // componentVm是组件的视图模型（ViewModel），用于存储组件的数据（data）和方法（methods）。在组件化系统中，我们需要将组件的数据和方法绑定到一个视图模型对象中，并在编译模板时使用该视图模型对象。这使得组件拥有自己的独立作用域，不会与其他组件或全局数据混淆。
+              // 具体来说，componentVm 的作用如下：
+              // 1 存储组件的数据：将组件的数据存储在 componentVm 中，以便在模板编译过程中能够访问和更新这些数据。
+              // 2 绑定组件的方法：将组件的方法绑定到 componentVm 上，以便在模板中调用这些方法时，能够正确地引用组件实例。
+              (function(componentVm, key, data) {
+                Object.defineProperty(componentVm, key, {
+                  get: function() {
+                    return data[key];
+                  },
+                  set: function(newVal) {
+                    data[key] = newVal;
+                  }
+                });
+              })(componentVm, key, data);
+            }
+          }
+
+          for (var key in methods) {
+            if (methods.hasOwnProperty(key)) {
+              componentVm[key] = methods[key].bind(componentVm);
+            }
+          }
+
+          var tempDiv = document.createElement('div');
+          tempDiv.innerHTML = component.template.trim();
+          var fragment = document.createDocumentFragment();
+          while (tempDiv.firstChild) {
+            fragment.appendChild(tempDiv.firstChild);
+          }
+          compileNode(fragment, componentVm);
+          node.parentNode.replaceChild(fragment, node);
+          return;
+        }
+
+        var attrs = node.attributes;
+        for (var i = 0; i < attrs.length; i++) {
+          var attrName = attrs[i].name;
+          var exp = attrs[i].value;
+
+          if (attrName === 'v-model') {
+            node.value = vm[exp];
+            node.addEventListener('input', (function(exp) {
+              return function(e) {
+                vm[exp] = e.target.value;
+              };
+            })(exp));
+          } else if (attrName === 'v-for') {
+            var parts = exp.split(' in ');
+            var item = parts[0].trim();
+            var arr = parts[1].trim();
+            node.removeAttribute('v-for');
+            var parentNode = node.parentNode;
+            var placeholder = document.createComment('v-for');
+            parentNode.insertBefore(placeholder, node);
+            parentNode.removeChild(node);
+
+            function renderList() {
+              var items = vm[arr];
+              while (parentNode.firstChild && parentNode.firstChild !== placeholder) {
+                parentNode.removeChild(parentNode.firstChild);
+              }
+              for (var i = 0; i < items.length; i++) {
+                var clone = node.cloneNode(true);
+                (function(clone, item, value) {
+                  clone.textContent = clone.textContent.replace(/\{\{\s*item\s*\}\}/g, value);
+                  parentNode.insertBefore(clone, placeholder);
+                })(clone, item, items[i]);
+              }
+            }
+
+            new Watcher(vm, arr, renderList);
+            renderList();
+          } else if (attrName.startsWith('v-bind:') || attrName.startsWith('@')) {
+            var eventType = attrName.startsWith('v-bind:') ? attrName.slice(7) : attrName.slice(1);
+            bindEvent(node, eventType, exp, vm);
+          } else if (attrName === 'v-show') {
+            (function(node, exp) {
+              function updateVisibility() {
+                node.style.display = vm[exp] ? '' : 'none';
+              }
+              updateVisibility();
+              new Watcher(vm, exp, updateVisibility);
+            })(node, exp);
+          }
+        }
+      } else if (node.nodeType === 3) { // 文本节点
+        var text = node.textContent;
+        var reg = /\{\{(.+?)\}\}/g;
+        var match = reg.exec(text);
+        if (match) {
+          (function(node, exp) {
+            var initialText = text;
+            function updateText() {
+              node.textContent = initialText.replace(reg, function(match, p1) {
+                return vm[p1.trim()];
+              });
+            }
+            updateText();
+            new Watcher(vm, exp, updateText);
+          })(node, match[1].trim());
+        }
+      }
+    }
+
+    function bindEvent(node, eventType, exp, vm) {
+      if (typeof vm[exp] === 'function') {
+        node.addEventListener(eventType, function(e) {
+          vm[exp](e);
+        });
+      } else {
+        // console.error(`Error: ${exp} is not a function.`);
+      }
+    }
+
+    
+    // Watcher在定义时会立即获取当前值，并将回调函数注册到依赖中。当依赖发生变化时，调用回调函数更新视图。
+    function Watcher(vm, exp, cb) {
+      this.vm = vm;
+      this.exp = exp;
+      this.cb = cb;
+      this.value = this.get();
+    }
+
+    Watcher.prototype.get = function() {
+      Dep.target = this.update.bind(this);
+      var value = this.vm[this.exp];
+      Dep.target = null;
+      return value;
+    };
+
+    Watcher.prototype.update = function() {
+      var newVal = this.vm[this.exp];
+      this.cb(newVal);
+    };
+
+    // 函数初始化数据对象，设置数据观察，并编译模板节点
+    function MVVM(options) {
+      this.data = options.data;
+      this.methods = options.methods;
+
+      observe(this.data);
+
+      for (var key in this.data) {
+        if (this.data.hasOwnProperty(key)) {
+          (function(vm, key) {
+            Object.defineProperty(vm, key, {
+              get: function() {
+                return vm.data[key];
+              },
+              set: function(newVal) {
+                vm.data[key] = newVal;
+              }
+            });
+          })(this, key);
+        }
+      }
+
+      for (var key in this.methods) {
+        if (this.methods.hasOwnProperty(key)) {
+          this[key] = this.methods[key];
+        }
+      }
+
+      var app = document.getElementById(options.el);
+      compileNode(app, this);
+    }
+
+    function compileNode(node, vm) {
+      var childNodes = node.childNodes;
+      for (var i = 0; i < childNodes.length; i++) {
+        compile(childNodes[i], vm);
+      }
+    }
+
+    function compileNode(node, vm) {
+      var childNodes = node.childNodes;
+      for (var i = 0; i < childNodes.length; i++) {
+        compile(childNodes[i], vm);
+        if (childNodes[i].childNodes && childNodes[i].childNodes.length) {
+          compileNode(childNodes[i], vm);
+        }
+      }
+    }
+
+    // 设置组件
+    // registerComponent('my-component', {
+    //   template: `<div>
+    //               <p>{{ message }}</p>
+    //               <button @click="reverseMessage">Reverse Message</button>
+    //             </div>`,
+    //   data: function() {
+    //     return {
+    //       message: 'Hello from component'
+    //     };
+    //   },
+    //   methods: {
+    //     reverseMessage: function() {
+    //       this.message = this.message.split('').reverse().join('');
+    //     }
+    //   }
+    // });
+
+
+    var vm = new MVVM({
+      el: 'app',
+      data: {
+        message: 'Hello World',
+        items: ['Item 1', 'Item 2', 'Item 3'],
+        isVisible: true
+      },
+      methods: {
+        addItem: function() {
+          this.items.push('New Item' + new Date().getTime());
+        },
+        logMessage: function() {
+          console.log(this.message);
+          alert(this.message);
+        },
+        toggleVisibility: function() {
+          this.isVisible = !this.isVisible;
+        }
+      }
+    });
+    window.dd = vm.data
+  </script>
+</body>
 </html>
+
+
+
+<!-- 
+
+
+  function observe(data) {
+  if (!data || typeof data !== 'object') {
+    return;
+  }
+
+  Object.keys(data).forEach((key) => {
+    defineReactive(data, key, data[key]);
+  });
+}
+
+function defineReactive(obj, key, val) {
+  observe(val);
+  var dep = new Dep();
+  Object.defineProperty(obj, key, {
+    enumerable: true,
+    configurable: true,
+    get() {
+      Dep.target && dep.addSub(Dep.target);
+      return val;
+    },
+    set(newVal) {
+      if (val === newVal) {
+        return;
+      }
+      val = newVal;
+      dep.notify();
+    }
+  });
+}
+
+class Dep {
+  constructor() {
+    this.subs = [];
+  }
+
+  addSub(sub) {
+    this.subs.push(sub);
+  }
+
+  notify() {
+    this.subs.forEach(sub => {
+      sub.update();
+    });
+  }
+}
+
+Dep.target = null;
+
+class Watcher {
+  constructor(vm, expOrFn, cb) {
+    this.vm = vm;
+    this.expOrFn = expOrFn;
+    this.cb = cb;
+    this.value = this.get();
+  }
+
+  get() {
+    Dep.target = this;
+    var value = this.vm[this.expOrFn];
+    Dep.target = null;
+    return value;
+  }
+
+  update() {
+    var value = this.vm[this.expOrFn];
+    var oldValue = this.value;
+    if (value !== oldValue) {
+      this.value = value;
+      this.cb.call(this.vm, value, oldValue);
+    }
+  }
+}
+改变二：在compile函数中添加对v-show指令的处理
+在compile函数中添加了对v-show指令的处理逻辑。对于带有v-show指令的元素，创建了一个函数来更新元素的显示状态，并通过修改CSS的display属性来控制它的可见性。同时，使用Watcher来监视数据变化，以便在数据变化时自动更新显示状态。
+function compile(node, vm) {
+  if (node.nodeType === 1) { // 元素节点
+    var attrs = node.attributes;
+    for (var i = 0; i < attrs.length; i++) {
+      var attrName = attrs[i].name;
+      var exp = attrs[i].value;
+
+      if (attrName === 'v-model') {
+        node.value = vm[exp];
+        node.addEventListener('input', (function(exp) {
+          return function(e) {
+            vm[exp] = e.target.value;
+          };
+        })(exp));
+      } else if (attrName === 'v-for') {
+        var parts = exp.split(' in ');
+        var item = parts[0].trim();
+        var arr = parts[1].trim();
+        node.removeAttribute('v-for');
+        var parentNode = node.parentNode;
+        var placeholder = document.createComment('v-for');
+        parentNode.insertBefore(placeholder, node);
+        parentNode.removeChild(node);
+
+        function renderList() {
+          var items = vm[arr];
+          while (parentNode.firstChild && parentNode.firstChild !== placeholder) {
+            parentNode.removeChild(parentNode.firstChild);
+          }
+          for (var i = 0; i < items.length; i++) {
+            var clone = node.cloneNode(true);
+            (function(clone, item, value) {
+              clone.textContent = clone.textContent.replace(/\{\{\s*item\s*\}\}/g, value);
+              parentNode.insertBefore(clone, placeholder);
+            })(clone, item, items[i]);
+          }
+        }
+
+        new Watcher(vm, arr, renderList);
+        renderList();
+      } else if (attrName.startsWith('v-bind:') || attrName.startsWith('@')) {
+        var eventType = attrName.startsWith('v-bind:') ? attrName.slice(7) : attrName.slice(1);
+        bindEvent(node, eventType, exp, vm);
+      } else if (attrName === 'v-show') {
+        // 处理 v-show 指令
+        (function(node, exp) {
+          function updateVisibility() {
+            node.style.display = vm[exp] ? '' : 'none';
+          }
+          updateVisibility();
+          new Watcher(vm, exp, updateVisibility);
+        })(node, exp);
+      }
+    }
+  } else if (node.nodeType === 3) { // 文本节点
+    var text = node.textContent;
+    var reg = /\{\{(.+?)\}\}/g;
+    var match = reg.exec(text);
+    if (match) {
+      (function(node, exp) {
+        var initialText = text;
+        function updateText() {
+          node.textContent = initialText.replace(reg, function(match, p1) {
+            return vm[p1.trim()];
+          });
+        }
+        updateText();
+        new Watcher(vm, exp, updateText);
+      })(node, match[1].trim());
+    }
+  }
+}
+添加错误处理到bindEvent函数
+在bindEvent函数中添加了一个类型检查，确保绑定的事件处理函数确实是一个函数。如果绑定的表达式不是一个函数，就在控制台输出错误信息，而不是直接调用它。
+
+原代码：
+function bindEvent(node, eventType, exp, vm) {
+  if (typeof vm[exp] === 'function') {
+    node.addEventListener(eventType, function(e) {
+      vm[exp](e);
+    });
+  } else {
+    console.error(`Error: ${exp} is not a function.`);
+  }
+}
+
+function MVVM(options) {
+  this.data = options.data;
+  this.methods = options.methods;
+  
+  observe(this.data);
+
+  for (var key in this.data) {
+    if (this.data.hasOwnProperty(key)) {
+      (function(vm, key) {
+        Object.defineProperty(vm, key, {
+          get: function() {
+            return vm.data[key];
+          },
+          set: function(newVal) {
+            vm.data[key] = newVal;
+          }
+        });
+      })(this, key);
+    }
+  }
+
+  for (var key in this.methods) {
+    if (this.methods.hasOwnProperty(key)) {
+      this[key] = this.methods[key];
+    }
+  }
+
+  var app = document.getElementById(options.el);
+  compileNode(app, this);
+}
+
+function compileNode(node, vm) {
+  var childNodes = node.childNodes;
+  for (var i = 0; i < childNodes.length; i++) {
+    compile(childNodes[i], vm);
+  }
+}
+
+
+class Component {
+  constructor(options) {
+    this.template = options.template;
+    this.data = options.data;
+    this.methods = options.methods;
+  }
+}
+
+var vm = new MVVM({
+  el: 'app',
+  data: {
+    message: 'Hello World',
+    items: ['Item 1', 'Item 2', 'Item 3'],
+    isVisible: true
+  },
+  methods: {
+    addItem: function() {
+      this.items.push('New Item');
+    },
+    logMessage: function() {
+      console.log(this.message);
+    },
+    toggleVisibility: function() {
+      this.isVisible = !this.isVisible;
+    }
+  }
+});
+通过以上两处关键改动，在bindEvent函数中添加了类型检查，确保事件处理函数确实是一个函数，并在compile函数中添加了对v-show指令的处理逻辑，实现了根据数据状态动态控制元素显示和隐藏的功能。这些改动使得MVVM框架更健壮，能够正确处理v-show指令，并在绑定事件时避免潜在的错误。
+ -->
