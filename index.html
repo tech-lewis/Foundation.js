@@ -383,10 +383,11 @@
 
             // 替换模板中的插槽内容
             for (var slotName in slots) {
-              var slotElements = tempDiv.querySelectorAll(`slot[name="${slotName}"]`)
-              slotElements.forEach(function (slotElement) {
+              var slotElements = tempDiv.querySelectorAll('slot[name=' + slotName + ']')
+              for (var idx = 0; idx < slotElements.length; idx++) {
+                var slotElement =  slotElements[idx]
                 slotElement.parentNode.replaceChild(slots[slotName], slotElement)
-              })
+              }
             }
 
             var fragment = document.createDocumentFragment()
@@ -563,8 +564,9 @@
         if (vm.slots) {
           for (var slotName in vm.slots) {
             var slotContent = vm.slots[slotName]
-            var slotElements = node.querySelectorAll(`[v-slot\\:${slotName}]`)
-            slotElements.forEach(function (slotElement) {
+            var slotElements = node.querySelectorAll('[v-slot\\:' + slotName + ']')
+            for (var idx = 0; idx < slotElements.length; idx++) {
+              var slotElement =  slotElements[idx]
               var tempDiv = document.createElement('div')
               tempDiv.innerHTML = vm[slotContent].innerHTML
               var fragment = document.createDocumentFragment()
@@ -572,7 +574,7 @@
                 fragment.appendChild(tempDiv.firstChild)
               }
               slotElement.appendChild(fragment)
-            })
+            }
           }
         }
       }
