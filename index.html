@@ -427,11 +427,7 @@
 
     // 注册的组件
     registerComponent('my-component', {
-      template: `<div>
-                  <p>{{ message }}</p>
-                  <p>{{ text }}</p>
-                  <button @click="reverseMessage">Reverse Message</button>
-                </div>`,
+      template: '<div><p>{{ message }}</p><p>{{ text }}</p><button @click="reverseMessage">Reverse Message</button></div>',
       data: function() {
         return {
           text: 'Hello from component'
