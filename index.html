@@ -30,7 +30,7 @@
         return Object.prototype.toString.call(arg) === '[object Array]';
       };
     }
-    
+
     // Polyfill for Object.assign
     if (typeof Object.assign !== 'function') {
       Object.assign = function(target) {
@@ -451,17 +451,17 @@
       template: '<div><p>{{ message }}</p><p>{{ text }}</p><button @click="reverseMessage">Reverse Message</button></div>',
       data: function() {
         return {
-          text: 'Hello from component'
+          text: 'Hello from MyComponent'
         };
       },
       created: function() {
         console.log('MyComponent created');
       },
       mounted: function() {
-        console.log('Component mounted');
+        console.log('MyComponent mounted');
       },
       updated: function() {
-        console.log('Component updated');
+        console.log('MyComponent updated');
       },
       methods: {
         reverseMessage: function() {
