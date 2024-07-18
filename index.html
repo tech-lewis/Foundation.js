@@ -307,6 +307,13 @@
         update();
       }
       
+      function instanceofPolyfill(obj, Constructor) {
+        while (obj != null) {
+          if (obj === Constructor.prototype) return true;
+          obj = Object.getPrototypeOf(obj);
+        }
+        return false;
+      }
 
       // 编译节点，使其响应数据变化
       function compile(node, vm) {
@@ -340,9 +347,16 @@
             for (var i = 0; i < children.length; i++) {
               if (children[i].tagName.toLowerCase() === 'template') {
                 var slotName = getSlotName(children[i])
-                console.log(children[i].attributes)
-                if (slotName) {
-                  slots[slotName] = children[i].content.cloneNode(true)
+                
+                // 检查HTMLTemplateElement是否存在
+                if (typeof HTMLTemplateElement !== 'undefined' && HTMLTemplateElement) {
+                    if (slotName) slots[slotName] = children[i].content.cloneNode(true)
+                    // HTMLTemplateElement存在，可以使用
+                    // console.log('HTMLTemplateElement is supported.');
+                } else {
+                    // HTMLTemplateElement不存在，可以提供备选方案或警告用户
+                    if (slotName) slots[slotName] = children[i].cloneNode(true)
+                    console.log('HTMLTemplateElement is not supported.' +  children[i].attributes);
                 }
               }
             }
@@ -564,11 +578,18 @@
         if (vm.slots) {
           for (var slotName in vm.slots) {
             var slotContent = vm.slots[slotName]
+            // for (var obj in vm.slots) {
+            //   console.log(obj)
+            // }
+            // console.log("~~~~~~~~~~~~~~~~")
             var slotElements = node.querySelectorAll('[v-slot\\:' + slotName + ']')
             for (var idx = 0; idx < slotElements.length; idx++) {
               var slotElement =  slotElements[idx]
               var tempDiv = document.createElement('div')
-              tempDiv.innerHTML = vm[slotContent].innerHTML
+              tempDiv = slotContent
+              if (typeof HTMLTemplateElement !== 'undefined' && HTMLTemplateElement) {
+                tempDiv.innerHTML = vm[slotContent].innerHTML
+              }
               var fragment = document.createDocumentFragment()
               while (tempDiv.firstChild) {
                 fragment.appendChild(tempDiv.firstChild)
