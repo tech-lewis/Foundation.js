@@ -1,496 +1,641 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <title>MVVM Reactive System</title>
-</head>
-<body>
-  <div id="app">
-    <my-component :message="message"></my-component>
-    <input type="text" v-model="message" />
-    <p>{{ message }}</p>
-    <ul>
-      <li v-for="item in items">{{ item }}</li>
-    </ul>
-    <button v-bind:click="addItem">Add Item</button>
-    <button @click="logMessage">Log Message</button>
-    <button @click="toggleVisibility">Toggle Visibility</button>
-    <p v-show="isVisible">This paragraph 测试v-show指令.</p>
-  </div>
+  <head>
+    <meta charset="utf-8" />
+    <title>MVVM Reactive System</title>
+  </head>
+  <body>
+    <div id="app">
+      <my-component :message="message">
+        <template v-slot:header>
+          <h1>Header Content: Mycomponent</h1>
+        </template>
+        <template v-slot:footer>
+          <hr>
+        </template>
+      </my-component>
+      <input type="text" v-model="message" />
+      <p>{{ message }}</p>
+      <ul>
+        <li v-for="item in items">{{ item }}</li>
+      </ul>
+      <button v-bind:click="addItem">Add Item</button>
+      <button @click="logMessage">Log Message</button>
+      <button @click="toggleVisibility">Toggle Visibility</button>
+      <p v-show="isVisible">This paragraph 测试v-show指令.</p>
+      <p v-if="isVisible">测试v-if指令.</p>
+      <p v-else>v-else指令.</p>
 
-  <script>
-    // 检查字符串是否以指定前缀开头
-    function hasPrefix(string, prefix) {
-      return string.slice(0, prefix.length) === prefix;
-    }
+    </div>
 
-    // 兼容性处理：如果不存在 Array.isArray 方法，则定义一个
-    if (!Array.isArray) {
-      Array.isArray = function(arg) {
-        return Object.prototype.toString.call(arg) === '[object Array]';
-      };
-    }
+    <script>
+      // 检查字符串是否以指定前缀开头
+      function hasPrefix(string, prefix) {
+        return string.slice(0, prefix.length) === prefix
+      }
 
-    // Polyfill for Object.assign
-    if (typeof Object.assign !== 'function') {
-      Object.assign = function(target) {
-        if (target == null) {
-          throw new TypeError('Cannot convert undefined or null to object');
+      // 兼容性处理：如果不存在 Array.isArray 方法，则定义一个
+      if (!Array.isArray) {
+        Array.isArray = function (arg) {
+          return Object.prototype.toString.call(arg) === '[object Array]'
         }
+      }
 
-        target = Object(target);
-        for (var index = 1; index < arguments.length; index++) {
-          var source = arguments[index];
-          if (source != null) {
-            for (var key in source) {
-              if (Object.prototype.hasOwnProperty.call(source, key)) {
-                target[key] = source[key];
+      // Polyfill for Object.assign
+      if (typeof Object.assign !== 'function') {
+        Object.assign = function (target) {
+          if (target == null) {
+            throw new TypeError('Cannot convert undefined or null to object')
+          }
+
+          target = Object(target)
+          for (var index = 1; index < arguments.length; index++) {
+            var source = arguments[index]
+            if (source != null) {
+              for (var key in source) {
+                if (Object.prototype.hasOwnProperty.call(source, key)) {
+                  target[key] = source[key]
+                }
               }
             }
           }
+          return target
         }
-        return target;
-      };
-    }
-    // 兼容性处理：如果不存在 Function.prototype.bind 方法，则定义一个
-    if (!Function.prototype.bind) {
-      Function.prototype.bind = function (oThis) {
-        if (typeof this !== 'function') {
-          throw new TypeError('Function.prototype.bind - what is trying to be bound is not callable');
+      }
+      // 兼容性处理：如果不存在 Function.prototype.bind 方法，则定义一个
+      if (!Function.prototype.bind) {
+        Function.prototype.bind = function (oThis) {
+          if (typeof this !== 'function') {
+            throw new TypeError(
+              'Function.prototype.bind - what is trying to be bound is not callable'
+            )
+          }
+
+          var aArgs = Array.prototype.slice.call(arguments, 1),
+            fToBind = this,
+            fNOP = function () {},
+            fBound = function () {
+              return fToBind.apply(
+                this instanceof fNOP && oThis ? this : oThis,
+                aArgs.concat(Array.prototype.slice.call(arguments))
+              )
+            }
+
+          fNOP.prototype = this.prototype
+          fBound.prototype = new fNOP()
+          return fBound
         }
+      }
 
-        var aArgs = Array.prototype.slice.call(arguments, 1),
-          fToBind = this,
-          fNOP = function () { },
-          fBound = function () {
-            return fToBind.apply(
-              this instanceof fNOP && oThis ? this : oThis,
-              aArgs.concat(Array.prototype.slice.call(arguments))
-            );
-          };
+      // 定义组件的构造函数.兼容iOS4的组件化
+      function Component(options) {
+        this.template = options.template
+        this.props = options.props || []
+        this.data = typeof options.data === 'function' ? options.data() : options.data
+        this.methods = options.methods
+        this.created = options.created || function () {}
+        this.mounted = options.mounted || function () {}
+        this.updated = options.updated || function () {}
+        this.destroyed = options.destroyed || function () {}
+        this.slots = {} // 初始化插槽内容
+      }
 
-        fNOP.prototype = this.prototype;
-        fBound.prototype = new fNOP();
-        return fBound;
-      };
-    }
+      // 存储已注册的组件
+      var components = {}
 
-    // 定义组件的构造函数.兼容iOS4的组件化
-    function Component(options) {
-      this.template = options.template; // 组件模板
-      this.props = options.props || []; // 组件接收的 props
-      this.data = typeof options.data === 'function' ? options.data() : options.data; // 组件的数据
-      this.methods = options.methods; // 组件的方法
-      this.created = options.created || function() {}; // 组件创建时的生命周期钩子
-      this.mounted = options.mounted || function() {}; // 组件挂载时的生命周期钩子
-      this.updated = options.updated || function() {}; // 组件更新时的生命周期钩子
-      this.destroyed = options.destroyed || function() {}; // 组件销毁时的生命周期钩子
-    }
+      // 注册组件的方法
+      function registerComponent(name, options) {
+        components[name] = new Component(options)
+      }
 
-    // 存储已注册的组件
-    var components = {};
+      // 定义响应式属性
+      function defineReactive(obj, key, val) {
+        var dep = new Dep() // 依赖管理实例
+        var childOb = observe(val) // 递归观察子属性
 
-    // 注册组件的方法
-    function registerComponent(name, options) {
-      components[name] = new Component(options);
-    }
-
-    // 定义响应式属性
-    function defineReactive(obj, key, val) {
-      var dep = new Dep(); // 依赖管理实例
-      var childOb = observe(val); // 递归观察子属性
-
-      Object.defineProperty(obj, key, {
-        get: function() {
-          if (Dep.target) {
-            dep.depend(); // 收集依赖
-            if (childOb) {
-              childOb.dep.depend();
-              if (Array.isArray(val)) {
-                dependArray(val); // 处理数组依赖
+        Object.defineProperty(obj, key, {
+          get: function () {
+            if (Dep.target) {
+              dep.depend() // 收集依赖
+              if (childOb) {
+                childOb.dep.depend()
+                if (Array.isArray(val)) {
+                  dependArray(val) // 处理数组依赖
+                }
               }
             }
-          }
-          return val;
-        },
-        set: function(newVal) {
-          if (newVal !== val) {
-            val = newVal;
-            childOb = observe(newVal); // 观察新值
-            dep.notify(); // 通知所有依赖
-          }
-        }
-      });
-    }
-
-    // 依赖管理构造函数
-    function Dep() {
-      this.subscribers = [];
-    }
-
-    Dep.target = null;
-
-    Dep.prototype.depend = function() {
-      if (Dep.target && this.subscribers.indexOf(Dep.target) === -1) {
-        this.subscribers.push(Dep.target); // 添加新的依赖
-      }
-    };
-
-    Dep.prototype.notify = function() {
-      var subs = this.subscribers.slice();
-      for (var i = 0; i < subs.length; i++) {
-        subs[i](); // 通知所有依赖更新
-      }
-    };
-
-    // 观察对象或数组
-    function observe(obj) {
-      if (Array.isArray(obj)) {
-        augmentArray(obj); // 增强数组的方法
-      } else if (typeof obj === 'object' && obj !== null) {
-        for (var key in obj) {
-          if (obj.hasOwnProperty(key)) {
-            defineReactive(obj, key, obj[key]); // 定义响应式属性
-          }
-        }
-      }
-      return obj.__ob__;
-    }
-
-    // 增强数组的方法，使其能够响应变化
-    function augmentArray(array) {
-      var arrayProto = Array.prototype;
-      var arrayMethods = Object.create(arrayProto);
-      var methodsToPatch = [
-        'push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse'
-      ];
-
-      methodsToPatch.forEach(function(method) {
-        var original = arrayProto[method];
-        Object.defineProperty(arrayMethods, method, {
-          value: function mutator() {
-            var args = [].slice.call(arguments);
-            var result = original.apply(this, args);
-            var ob = this.__ob__;
-            var inserted;
-            switch (method) {
-              case 'push':
-              case 'unshift':
-                inserted = args;
-                break;
-              case 'splice':
-                inserted = args.slice(2);
-                break;
+            return val
+          },
+          set: function (newVal) {
+            if (newVal !== val) {
+              val = newVal
+              childOb = observe(newVal) // 观察新值
+              dep.notify() // 通知所有依赖
             }
-            if (inserted) observeArray(inserted);
-            ob.dep.notify(); // 通知依赖更新
-            return result;
+          }
+        })
+      }
+
+      // 依赖管理构造函数
+      function Dep() {
+        this.subscribers = []
+      }
+
+      Dep.target = null
+
+      Dep.prototype.depend = function () {
+        if (Dep.target && this.subscribers.indexOf(Dep.target) === -1) {
+          this.subscribers.push(Dep.target) // 添加新的依赖
+        }
+      }
+
+      Dep.prototype.notify = function () {
+        var subs = this.subscribers.slice()
+        for (var i = 0; i < subs.length; i++) {
+          subs[i]() // 通知所有依赖更新
+        }
+      }
+
+      // 观察对象或数组
+      function observe(obj) {
+        if (Array.isArray(obj)) {
+          augmentArray(obj) // 增强数组的方法
+        } else if (typeof obj === 'object' && obj !== null) {
+          for (var key in obj) {
+            if (obj.hasOwnProperty(key)) {
+              defineReactive(obj, key, obj[key]) // 定义响应式属性
+            }
+          }
+        }
+        return obj.__ob__
+      }
+
+      // 增强数组的方法，使其能够响应变化
+      function augmentArray(array) {
+        var arrayProto = Array.prototype
+        var arrayMethods = Object.create(arrayProto)
+        var methodsToPatch = ['push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse']
+
+        methodsToPatch.forEach(function (method) {
+          var original = arrayProto[method]
+          Object.defineProperty(arrayMethods, method, {
+            value: function mutator() {
+              var args = [].slice.call(arguments)
+              var result = original.apply(this, args)
+              var ob = this.__ob__
+              var inserted
+              switch (method) {
+                case 'push':
+                case 'unshift':
+                  inserted = args
+                  break
+                case 'splice':
+                  inserted = args.slice(2)
+                  break
+              }
+              if (inserted) observeArray(inserted)
+              ob.dep.notify() // 通知依赖更新
+              return result
+            },
+            enumerable: false,
+            writable: true,
+            configurable: true
+          })
+        })
+
+        Object.defineProperty(array, '__ob__', {
+          value: {
+            dep: new Dep()
           },
           enumerable: false,
           writable: true,
           configurable: true
-        });
-      });
+        })
 
-      Object.defineProperty(array, '__ob__', {
-        value: {
-          dep: new Dep()
-        },
-        enumerable: false,
-        writable: true,
-        configurable: true
-      });
-
-      array.__proto__ = arrayMethods;
-    }
-
-    // 观察数组中的元素
-    function observeArray(items) {
-      for (var i = 0; i < items.length; i++) {
-        observe(items[i]);
+        array.__proto__ = arrayMethods
       }
-    }
 
-    // 收集数组的依赖
-    function dependArray(value) {
-      for (var e, i = 0, l = value.length; i < l; i++) {
-        e = value[i];
-        e && e.__ob__ && e.__ob__.dep.depend();
-        if (Array.isArray(e)) {
-          dependArray(e);
+      // 观察数组中的元素
+      function observeArray(items) {
+        for (var i = 0; i < items.length; i++) {
+          observe(items[i])
         }
       }
-    }
 
-    // 编译节点，使其响应数据变化
-    function compile(node, vm) {
-      if (node.nodeType === 1) { // 元素节点
-        var tagName = node.tagName.toLowerCase();
-        if (components[tagName]) { // 判断是否为组件
-          var component = components[tagName];
-
-          var props = {};
-          var attrs = node.attributes;
-          for (var i = 0; i < attrs.length; i++) {
-            var attrName = attrs[i].name;
-            var exp = attrs[i].value;
-            if (hasPrefix(attrName, ':')) {
-              var propName = attrName.slice(1);
-              props[propName] = vm[exp];
-
-              // 注册 Watcher 观察父组件中的 prop
-              new Watcher(vm, exp, function(newVal) {
-                componentVm[propName] = newVal;
-                component.updated(); // 调用 updated 生命周期钩子
-              });
-            }
-          }
-
-          var data = typeof component.data === 'function' ? component.data() : component.data;
-          data = Object.assign({}, data, props); // 合并 props 和组件 data
-          observe(data);
-          var methods = component.methods;
-
-          var componentVm = {};
-          // 调用 created 生命周期钩子
-          component.created.call(componentVm);
-          for (var key in data) {
-            if (data.hasOwnProperty(key)) {
-              (function(componentVm, key, data) {
-                Object.defineProperty(componentVm, key, {
-                  get: function() {
-                    return data[key];
-                  },
-                  set: function(newVal) {
-                    data[key] = newVal;
-                  }
-                });
-              })(componentVm, key, data);
-            }
-          }
-
-          for (var key in methods) {
-            if (methods.hasOwnProperty(key)) {
-              componentVm[key] = methods[key].bind(componentVm);
-            }
-          }
-
-          var tempDiv = document.createElement('div');
-          tempDiv.innerHTML = component.template.trim();
-          var fragment = document.createDocumentFragment();
-          while (tempDiv.firstChild) {
-            fragment.appendChild(tempDiv.firstChild);
-          }
-          compileNode(fragment, componentVm);
-          node.parentNode.replaceChild(fragment, node);
-          
-          // 调用 mounted 生命周期钩子
-          component.mounted.call(componentVm);
-          return;
-        }
-
-        var attrs = node.attributes;
-        for (var i = 0; i < attrs.length; i++) {
-          var attrName = attrs[i].name;
-          var exp = attrs[i].value;
-
-          if (attrName === 'v-model') { // 双向绑定
-            node.value = vm[exp];
-            node.addEventListener('input', (function(exp) {
-              return function(e) {
-                vm[exp] = e.target.value;
-              };
-            })(exp));
-          } else if (attrName === 'v-for') { // 循环指令
-            var parts = exp.split(' in ');
-            var item = parts[0].trim();
-            var arr = parts[1].trim();
-            node.removeAttribute('v-for');
-            var parentNode = node.parentNode;
-            var placeholder = document.createComment('v-for');
-            parentNode.insertBefore(placeholder, node);
-            parentNode.removeChild(node);
-
-            function renderList() {
-              var items = vm[arr];
-              while (parentNode.firstChild && parentNode.firstChild !== placeholder) {
-                parentNode.removeChild(parentNode.firstChild);
-              }
-              for (var i = 0; i < items.length; i++) {
-                var clone = node.cloneNode(true);
-                (function(clone, item, value) {
-                  clone.textContent = clone.textContent.replace(/\{\{\s*item\s*\}\}/g, value);
-                  parentNode.insertBefore(clone, placeholder);
-                })(clone, item, items[i]);
-              }
-            }
-
-            new Watcher(vm, arr, renderList);
-            renderList();
-          } else if (hasPrefix(attrName, 'v-bind:') || hasPrefix(attrName, '@')) { // 绑定属性或事件
-            var eventType = hasPrefix(attrName, 'v-bind:') ? attrName.slice(7) : attrName.slice(1);
-            bindEvent(node, eventType, exp, vm);
-          } else if (attrName === 'v-show') { // 显示/隐藏指令
-            (function(node, exp) {
-              function updateVisibility() {
-                node.style.display = vm[exp] ? '' : 'none';
-              }
-              updateVisibility();
-              new Watcher(vm, exp, updateVisibility);
-            })(node, exp);
+      // 收集数组的依赖
+      function dependArray(value) {
+        for (var e, i = 0, l = value.length; i < l; i++) {
+          e = value[i]
+          e && e.__ob__ && e.__ob__.dep.depend()
+          if (Array.isArray(e)) {
+            dependArray(e)
           }
         }
-      } else if (node.nodeType === 3) { // 文本节点
-        var text = node.textContent;
-        var reg = /\{\{(.+?)\}\}/g;
-        var match = reg.exec(text);
-        if (match) {
-          (function(node, exp) {
-            var initialText = text;
-            function updateText() {
-              node.textContent = initialText.replace(reg, function(match, p1) {
-                return vm[p1.trim()];
-              });
+      }
+      function processChildNode(childNode, slots) {
+        // 检查 childNode 是否存在并且是元素节点（nodeType === 1）
+        if (childNode && childNode.nodeType === 1) {
+          var slotName = childNode.getAttribute('v-slot')
+          if (slotName) {
+            // 检查 childNode 是否是一个 <template> 元素
+            if (childNode.tagName === 'TEMPLATE') {
+              slots[slotName] = childNode.content.cloneNode(true)
+            } else {
+              console.log('Error: childNode is not a <template> element.')
             }
-            updateText();
-            new Watcher(vm, exp, updateText);
-          })(node, match[1].trim());
-        }
-      }
-    }
-
-    // 绑定事件
-    function bindEvent(node, eventType, exp, vm) {
-      if (typeof vm[exp] === 'function') {
-        node.addEventListener(eventType, function(e) {
-          vm[exp](e);
-        });
-      } else {
-        // console.error(`Error: ${exp} is not a function.`);
-      }
-    }
-
-    // 观察者构造函数
-    function Watcher(vm, exp, cb) {
-      this.vm = vm;
-      this.exp = exp;
-      this.cb = cb;
-      this.value = this.get();
-    }
-
-    Watcher.prototype.get = function() {
-      Dep.target = this.update.bind(this);
-      var value = this.vm[this.exp];
-      Dep.target = null;
-      return value;
-    };
-
-    Watcher.prototype.update = function() {
-      var newVal = this.vm[this.exp];
-      this.cb(newVal);
-    };
-
-    // MVVM 构造函数
-    function MVVM(options) {
-      this.data = options.data;
-      this.methods = options.methods;
-
-      observe(this.data);
-
-      for (var key in this.data) {
-        if (this.data.hasOwnProperty(key)) {
-          (function(vm, key) {
-            Object.defineProperty(vm, key, {
-              get: function() {
-                return vm.data[key];
-              },
-              set: function(newVal) {
-                vm.data[key] = newVal;
-              }
-            });
-          })(this, key);
-        }
-      }
-
-      for (var key in this.methods) {
-        if (this.methods.hasOwnProperty(key)) {
-          this[key] = this.methods[key];
-        }
-      }
-
-      var app = document.getElementById(options.el);
-      compileNode(app, this);
-    }
-
-    // 递归编译子节点
-    function compileNode(node, vm) {
-      var childNodes = node.childNodes;
-      for (var i = 0; i < childNodes.length; i++) {
-        compile(childNodes[i], vm);
-        if (childNodes[i].childNodes && childNodes[i].childNodes.length) {
-          compileNode(childNodes[i], vm);
-        }
-      }
-    }
-
-    // 设置响应式属性
-    MVVM.prototype.$set = function(obj, key, value) {
-      if (Array.isArray(obj)) {
-        obj.splice(key, 1, value);
-      } else {
-        if (obj.hasOwnProperty(key)) {
-          obj[key] = value;
+          } else {
+            console.log('Error: childNode does not have a "v-slot" attribute.')
+          }
         } else {
-          defineReactive(obj, key, value);
+          console.log('Error: childNode is not an element node.')
         }
       }
-    };
+      function getSlotName(templateElement) {
+        for (var i = 0; i < templateElement.attributes.length; i++) {
+          var attr = templateElement.attributes[i]
+          if (hasPrefix(attr.name, 'v-slot:')) {
+            return attr.name.slice(7) // 返回 "v-slot:" 后面的部分 (即插槽名称)
+          }
+        }
+        return null // 如果没有找到 v-slot 属性，则返回 null
+      }
 
-    // 注册的组件
-    registerComponent('my-component', {
-      template: '<div><p>{{ message }}</p><p>{{ text }}</p><button @click="reverseMessage">Reverse Message</button></div>',
-      data: function() {
-        return {
-          text: 'Hello from MyComponent'
-        };
-      },
-      created: function() {
-        console.log('MyComponent created');
-      },
-      mounted: function() {
-        console.log('MyComponent mounted');
-      },
-      updated: function() {
-        console.log('MyComponent updated');
-      },
-      methods: {
-        reverseMessage: function() {
-          this.text = this.text.split('').reverse().join('');
-        }
-      }
-    });
+      // 处理v-if指令
+      function processIf(node, vm, directive) {
+        var exp = node.getAttribute(directive);
+        var parentNode = node.parentNode;
+        var placeholder = document.createComment(directive);
+        parentNode.insertBefore(placeholder, node);
+        parentNode.removeChild(node);
 
-    var vm = new MVVM({
-      el: 'app',
-      data: {
-        message: 'Hello World',
-        items: ['Item 1', 'Item 2', 'Item 3'],
-        isVisible: true
-      },
-      methods: {
-        addItem: function() {
-          this.$set(this.items, 0, 'New Item' + new Date().getTime());
-        },
-        logMessage: function() {
-          console.log(this.message);
-          alert(this.message);
-        },
-        toggleVisibility: function() {
-          this.isVisible = !this.isVisible;
+        function update() {
+          var shouldRender = vm[exp];
+          var currentNode = placeholder.nextSibling;
+
+          if (directive === 'v-if' || directive === 'v-else-if') {
+            if (shouldRender) {
+              if (!currentNode || currentNode.nodeType === Node.COMMENT_NODE) {
+                // 插入节点
+                var clone = node.cloneNode(true);
+                parentNode.insertBefore(clone, placeholder.nextSibling);
+                compileNode(clone, vm);
+              }
+            } else {
+              // 移除节点
+              if (currentNode && currentNode.nodeType !== Node.COMMENT_NODE) {
+                parentNode.removeChild(currentNode);
+              }
+            }
+          } else if (directive === 'v-else') {
+            if (!shouldRender) {
+              if (!currentNode || currentNode.nodeType === Node.COMMENT_NODE) {
+                // 插入节点
+                var clone = node.cloneNode(true);
+                parentNode.insertBefore(clone, placeholder.nextSibling);
+                compileNode(clone, vm);
+              }
+            } else {
+              // 移除节点
+              if (currentNode && currentNode.nodeType !== Node.COMMENT_NODE) {
+                parentNode.removeChild(currentNode);
+              }
+            }
+          }
+        }
+
+        new Watcher(vm, exp, update);
+        update();
+      }
+      
+
+      // 编译节点，使其响应数据变化
+      function compile(node, vm) {
+        if (node.nodeType === 1) {
+          // 元素节点
+          var tagName = node.tagName.toLowerCase()
+          if (components[tagName]) {
+            // 判断是否为组件
+            var component = components[tagName]
+
+            var props = {}
+            var slots = {}
+            var attrs = node.attributes
+            for (var i = 0; i < attrs.length; i++) {
+              var attrName = attrs[i].name
+              var exp = attrs[i].value
+              if (hasPrefix(attrName, ':')) {
+                var propName = attrName.slice(1)
+                props[propName] = vm[exp]
+
+                // 注册 Watcher 观察父组件中的 prop
+                new Watcher(vm, exp, function (newVal) {
+                  componentVm[propName] = newVal
+                  component.updated() // 调用 updated 生命周期钩子
+                })
+              }
+            }
+
+            // 提取具名插槽内容，兼容 v-slot 和 slot 属性
+            var children = node.children
+            for (var i = 0; i < children.length; i++) {
+              if (children[i].tagName.toLowerCase() === 'template') {
+                var slotName = getSlotName(children[i])
+                console.log(children[i].attributes)
+                if (slotName) {
+                  slots[slotName] = children[i].content.cloneNode(true)
+                }
+              }
+            }
+
+            var data = typeof component.data === 'function' ? component.data() : component.data
+            data = Object.assign({}, data, props) // 合并 props 和组件 data
+            observe(data)
+            var methods = component.methods
+
+            var componentVm = {}
+            // 调用 created 生命周期钩子
+            component.created.call(componentVm)
+            for (var key in data) {
+              if (data.hasOwnProperty(key)) {
+                ;(function (componentVm, key, data) {
+                  Object.defineProperty(componentVm, key, {
+                    get: function () {
+                      return data[key]
+                    },
+                    set: function (newVal) {
+                      data[key] = newVal
+                    }
+                  })
+                })(componentVm, key, data)
+              }
+            }
+
+            for (var key in methods) {
+              if (methods.hasOwnProperty(key)) {
+                componentVm[key] = methods[key].bind(componentVm)
+              }
+            }
+
+            componentVm.slots = slots // 设置插槽内容
+
+            var tempDiv = document.createElement('div')
+            tempDiv.innerHTML = component.template.trim()
+
+            // 替换模板中的插槽内容
+            for (var slotName in slots) {
+              var slotElements = tempDiv.querySelectorAll(`slot[name="${slotName}"]`)
+              slotElements.forEach(function (slotElement) {
+                slotElement.parentNode.replaceChild(slots[slotName], slotElement)
+              })
+            }
+
+            var fragment = document.createDocumentFragment()
+            while (tempDiv.firstChild) {
+              fragment.appendChild(tempDiv.firstChild)
+            }
+            compileNode(fragment, componentVm)
+            node.parentNode.replaceChild(fragment, node)
+
+            // 调用 mounted 生命周期钩子
+            component.mounted.call(componentVm)
+            return
+          }
+
+          var attrs = node.attributes
+          for (var i = 0; i < attrs.length; i++) {
+            var attrName = attrs[i].name
+            var exp = attrs[i].value
+            
+            if (attrName === 'v-model') {
+              // 双向绑定
+              node.value = vm[exp]
+              node.addEventListener(
+                'input',
+                (function (exp) {
+                  return function (e) {
+                    vm[exp] = e.target.value
+                  }
+                })(exp)
+              )
+            } else if (attrName === 'v-for') {
+              // 循环指令
+              var parts = exp.split(' in ')
+              var item = parts[0].trim()
+              var arr = parts[1].trim()
+              node.removeAttribute('v-for')
+              var parentNode = node.parentNode
+              var placeholder = document.createComment('v-for')
+              parentNode.insertBefore(placeholder, node)
+              parentNode.removeChild(node)
+
+              function renderList() {
+                var items = vm[arr]
+                while (parentNode.firstChild && parentNode.firstChild !== placeholder) {
+                  parentNode.removeChild(parentNode.firstChild)
+                }
+                for (var i = 0; i < items.length; i++) {
+                  var clone = node.cloneNode(true)
+                  ;(function (clone, item, value) {
+                    clone.textContent = clone.textContent.replace(/\{\{\s*item\s*\}\}/g, value)
+                    parentNode.insertBefore(clone, placeholder)
+                  })(clone, item, items[i])
+                }
+              }
+
+              new Watcher(vm, arr, renderList)
+              renderList()
+            } else if (hasPrefix(attrName, 'v-bind:') || hasPrefix(attrName, '@')) {
+              // 绑定属性或事件
+              var eventType = hasPrefix(attrName, 'v-bind:') ? attrName.slice(7) : attrName.slice(1)
+              bindEvent(node, eventType, exp, vm)
+            } else if (attrName === 'v-show') {
+              // 显示/隐藏指令
+              ;(function (node, exp) {
+                function updateVisibility() {
+                  node.style.display = vm[exp] ? '' : 'none'
+                }
+                updateVisibility()
+                new Watcher(vm, exp, updateVisibility)
+              })(node, exp)
+            } else if (attrName === 'v-if') {
+              return processIf(node, vm, 'v-if');
+            } else if (attrName === 'v-else-if') {
+              return processIf(node, vm, 'v-else-if');
+            } else if (attrName === 'v-else') {
+              return processIf(node, vm, 'v-else');
+            }
+          }
+        } else if (node.nodeType === 3) {
+          // 文本节点
+          var text = node.textContent
+          var reg = /\{\{(.+?)\}\}/g
+          var match = reg.exec(text)
+          if (match) {
+            ;(function (node, exp) {
+              var initialText = text
+              function updateText() {
+                node.textContent = initialText.replace(reg, function (match, p1) {
+                  return vm[p1.trim()]
+                })
+              }
+              updateText()
+              new Watcher(vm, exp, updateText)
+            })(node, match[1].trim())
+          }
         }
       }
-    });
-    window.dd = vm.data
-  </script>
-</body>
+
+      // 绑定事件
+      function bindEvent(node, eventType, exp, vm) {
+        if (typeof vm[exp] === 'function') {
+          node.addEventListener(eventType, function (e) {
+            vm[exp](e)
+          })
+        } else {
+          // console.error(`Error: ${exp} is not a function.`);
+        }
+      }
+
+      // 观察者构造函数
+      function Watcher(vm, exp, cb) {
+        this.vm = vm;
+        this.exp = exp;
+        this.cb = cb;
+        this.value = this.get();
+      }
+
+      Watcher.prototype.get = function () {
+        Dep.target = this.update.bind(this);
+        var value = this.vm[this.exp];
+        Dep.target = null;
+        return value;
+      }
+
+      Watcher.prototype.update = function () {
+        var newVal = this.vm[this.exp];
+        this.cb(newVal);
+      }
+
+
+      // MVVM 构造函数
+      function MVVM(options) {
+        this.data = options.data
+        this.methods = options.methods
+
+        observe(this.data)
+
+        for (var key in this.data) {
+          if (this.data.hasOwnProperty(key)) {
+            ;(function (vm, key) {
+              Object.defineProperty(vm, key, {
+                get: function () {
+                  return vm.data[key]
+                },
+                set: function (newVal) {
+                  vm.data[key] = newVal
+                }
+              })
+            })(this, key)
+          }
+        }
+
+        for (var key in this.methods) {
+          if (this.methods.hasOwnProperty(key)) {
+            this[key] = this.methods[key]
+          }
+        }
+
+        var app = document.getElementById(options.el)
+        compileNode(app, this)
+      }
+
+      // 递归编译子节点
+      function compileNode(node, vm) {
+        var childNodes = node.childNodes
+        for (var i = 0; i < childNodes.length; i++) {
+          compile(childNodes[i], vm)
+          if (childNodes[i].childNodes && childNodes[i].childNodes.length) {
+            compileNode(childNodes[i], vm)
+          }
+        }
+
+        // 处理插槽内容
+        if (vm.slots) {
+          for (var slotName in vm.slots) {
+            var slotContent = vm.slots[slotName]
+            var slotElements = node.querySelectorAll(`[v-slot\\:${slotName}]`)
+            slotElements.forEach(function (slotElement) {
+              var tempDiv = document.createElement('div')
+              tempDiv.innerHTML = vm[slotContent].innerHTML
+              var fragment = document.createDocumentFragment()
+              while (tempDiv.firstChild) {
+                fragment.appendChild(tempDiv.firstChild)
+              }
+              slotElement.appendChild(fragment)
+            })
+          }
+        }
+      }
+
+      // 设置响应式属性
+      MVVM.prototype.$set = function (obj, key, value) {
+        if (Array.isArray(obj)) {
+          obj.splice(key, 1, value)
+        } else {
+          if (obj.hasOwnProperty(key)) {
+            obj[key] = value
+          } else {
+            defineReactive(obj, key, value)
+          }
+        }
+      }
+
+      // 注册的组件
+      registerComponent('my-component', {
+        template: '<div><slot name="header"></slot><p>{{ message }}</p><p>{{ text }}</p><button @click="reverseMessage">Reverse Message</button><slot name="footer"></slot></div>',
+        props: ['message'], // 注意这里要接收父组件传递的props
+        data: function () {
+          return {
+            text: 'Hello from MyComponent'
+          }
+        },
+        created: function () {
+          console.log('MyComponent created')
+        },
+        mounted: function () {
+          console.log('MyComponent mounted')
+        },
+        updated: function () {
+          console.log('MyComponent updated')
+        },
+        methods: {
+          reverseMessage: function () {
+            this.text = this.text.split('').reverse().join('')
+          }
+        }
+      })
+
+      var vm = new MVVM({
+        el: 'app',
+        data: {
+          message: 'Hello World',
+          items: ['Item 1', 'Item 2', 'Item 3'],
+          isVisible: true
+        },
+        methods: {
+          addItem: function () {
+            this.$set(this.items, 0, 'New Item' + new Date().getTime())
+          },
+          logMessage: function () {
+            console.log(this.message)
+            alert(this.message)
+          },
+          toggleVisibility: function () {
+            this.isVisible = !this.isVisible
+          }
+        }
+      })
+      window.dd = vm.data
+    </script>
+  </body>
 </html>
