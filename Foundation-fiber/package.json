@@ -23,6 +23,7 @@
     "webpack-dev-server": "^4.6.0"
   },
   "dependencies": {
+    "express": "^3.0.0-alpha1",
     "react": "^17.0.2",
     "react-dom": "^17.0.2"
   }
