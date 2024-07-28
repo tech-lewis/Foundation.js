@@ -1,5 +1,5 @@
 /**
- * JSXTransformer v0.13.0-alpha.1
+ * JSXTransformer v0.13.0-alpha.2
  */
 !function(e){if("object"==typeof exports&&"undefined"!=typeof module)module.exports=e();else if("function"==typeof define&&define.amd)define([],e);else{var f;"undefined"!=typeof window?f=window:"undefined"!=typeof global?f=global:"undefined"!=typeof self&&(f=self),f.JSXTransformer=e()}}(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
 /**
@@ -15,10 +15,10 @@
 
 'use strict';
 
-var buffer = _dereq_('buffer');
-var transform = _dereq_('jstransform').transform;
-var typesSyntax = _dereq_('jstransform/visitors/type-syntax');
-var visitors = _dereq_('./fbtransform/visitors');
+var buffer = _dereq_(2);
+var transform = _dereq_(21).transform;
+var typesSyntax = _dereq_(33);
+var visitors = _dereq_(37);
 
 var headEl;
 var dummyAnchor;
@@ -342,7 +342,7 @@ module.exports = {
   exec: exec
 };
 
-},{"./fbtransform/visitors":37,"buffer":2,"jstransform":21,"jstransform/visitors/type-syntax":33}],2:[function(_dereq_,module,exports){
+},{}],2:[function(_dereq_,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -350,16 +350,17 @@ module.exports = {
  * @license  MIT
  */
 
-var base64 = _dereq_('base64-js')
-var ieee754 = _dereq_('ieee754')
-var isArray = _dereq_('is-array')
+var base64 = _dereq_(3)
+var ieee754 = _dereq_(4)
+var isArray = _dereq_(5)
 
 exports.Buffer = Buffer
-exports.SlowBuffer = Buffer
+exports.SlowBuffer = SlowBuffer
 exports.INSPECT_MAX_BYTES = 50
 Buffer.poolSize = 8192 // not used by this implementation
 
 var kMaxLength = 0x3fffffff
+var rootParent = {}
 
 /**
  * If `Buffer.TYPED_ARRAY_SUPPORT`:
@@ -419,8 +420,6 @@ function Buffer (subject, encoding, noZero) {
   if (type === 'number')
     length = subject > 0 ? subject >>> 0 : 0
   else if (type === 'string') {
-    if (encoding === 'base64')
-      subject = base64clean(subject)
     length = Buffer.byteLength(subject, encoding)
   } else if (type === 'object' && subject !== null) { // assume object is array-like
     if (subject.type === 'Buffer' && isArray(subject.data))
@@ -429,7 +428,7 @@ function Buffer (subject, encoding, noZero) {
   } else
     throw new TypeError('must start with number, buffer, array or string')
 
-  if (this.length > kMaxLength)
+  if (length > kMaxLength)
     throw new RangeError('Attempt to allocate Buffer larger than maximum ' +
       'size: 0x' + kMaxLength.toString(16) + ' bytes')
 
@@ -465,6 +464,18 @@ function Buffer (subject, encoding, noZero) {
     }
   }
 
+  if (length > 0 && length <= Buffer.poolSize)
+    buf.parent = rootParent
+
+  return buf
+}
+
+function SlowBuffer(subject, encoding, noZero) {
+  if (!(this instanceof SlowBuffer))
+    return new SlowBuffer(subject, encoding, noZero)
+
+  var buf = new Buffer(subject, encoding, noZero)
+  delete buf.parent
   return buf
 }
 
@@ -615,7 +626,7 @@ Buffer.prototype.toString = function (encoding, start, end) {
 }
 
 Buffer.prototype.equals = function (b) {
-  if(!Buffer.isBuffer(b)) throw new TypeError('Argument must be a Buffer')
+  if (!Buffer.isBuffer(b)) throw new TypeError('Argument must be a Buffer')
   return Buffer.compare(this, b) === 0
 }
 
@@ -675,7 +686,7 @@ function hexWrite (buf, string, offset, length) {
 }
 
 function utf8Write (buf, string, offset, length) {
-  var charsWritten = blitBuffer(utf8ToBytes(string), buf, offset, length)
+  var charsWritten = blitBuffer(utf8ToBytes(string, buf.length - offset), buf, offset, length)
   return charsWritten
 }
 
@@ -694,7 +705,7 @@ function base64Write (buf, string, offset, length) {
 }
 
 function utf16leWrite (buf, string, offset, length) {
-  var charsWritten = blitBuffer(utf16leToBytes(string), buf, offset, length, 2)
+  var charsWritten = blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length, 2)
   return charsWritten
 }
 
@@ -714,6 +725,10 @@ Buffer.prototype.write = function (string, offset, length, encoding) {
   }
 
   offset = Number(offset) || 0
+
+  if (length < 0 || offset < 0 || offset > this.length)
+    throw new RangeError('attempt to write outside buffer bounds');
+
   var remaining = this.length - offset
   if (!length) {
     length = remaining
@@ -792,13 +807,19 @@ function asciiSlice (buf, start, end) {
   end = Math.min(buf.length, end)
 
   for (var i = start; i < end; i++) {
-    ret += String.fromCharCode(buf[i])
+    ret += String.fromCharCode(buf[i] & 0x7F)
   }
   return ret
 }
 
 function binarySlice (buf, start, end) {
-  return asciiSlice(buf, start, end)
+  var ret = ''
+  end = Math.min(buf.length, end)
+
+  for (var i = start; i < end; i++) {
+    ret += String.fromCharCode(buf[i])
+  }
+  return ret
 }
 
 function hexSlice (buf, start, end) {
@@ -847,16 +868,21 @@ Buffer.prototype.slice = function (start, end) {
   if (end < start)
     end = start
 
+  var newBuf
   if (Buffer.TYPED_ARRAY_SUPPORT) {
-    return Buffer._augment(this.subarray(start, end))
+    newBuf = Buffer._augment(this.subarray(start, end))
   } else {
     var sliceLen = end - start
-    var newBuf = new Buffer(sliceLen, undefined, true)
+    newBuf = new Buffer(sliceLen, undefined, true)
     for (var i = 0; i < sliceLen; i++) {
       newBuf[i] = this[i + start]
     }
-    return newBuf
   }
+
+  if (newBuf.length)
+    newBuf.parent = this.parent || this
+
+  return newBuf
 }
 
 /*
@@ -867,6 +893,35 @@ function checkOffset (offset, ext, length) {
     throw new RangeError('offset is not uint')
   if (offset + ext > length)
     throw new RangeError('Trying to access beyond buffer length')
+}
+
+Buffer.prototype.readUIntLE = function (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert)
+    checkOffset(offset, byteLength, this.length)
+
+  var val = this[offset]
+  var mul = 1
+  var i = 0
+  while (++i < byteLength && (mul *= 0x100))
+    val += this[offset + i] * mul
+
+  return val
+}
+
+Buffer.prototype.readUIntBE = function (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert)
+    checkOffset(offset, byteLength, this.length)
+
+  var val = this[offset + --byteLength]
+  var mul = 1
+  while (byteLength > 0 && (mul *= 0x100))
+    val += this[offset + --byteLength] * mul;
+
+  return val
 }
 
 Buffer.prototype.readUInt8 = function (offset, noAssert) {
@@ -905,6 +960,44 @@ Buffer.prototype.readUInt32BE = function (offset, noAssert) {
       ((this[offset + 1] << 16) |
       (this[offset + 2] << 8) |
       this[offset + 3])
+}
+
+Buffer.prototype.readIntLE = function (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert)
+    checkOffset(offset, byteLength, this.length)
+
+  var val = this[offset]
+  var mul = 1
+  var i = 0
+  while (++i < byteLength && (mul *= 0x100))
+    val += this[offset + i] * mul
+  mul *= 0x80
+
+  if (val >= mul)
+    val -= Math.pow(2, 8 * byteLength)
+
+  return val
+}
+
+Buffer.prototype.readIntBE = function (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert)
+    checkOffset(offset, byteLength, this.length)
+
+  var i = byteLength
+  var mul = 1
+  var val = this[offset + --i]
+  while (i > 0 && (mul *= 0x100))
+    val += this[offset + --i] * mul
+  mul *= 0x80
+
+  if (val >= mul)
+    val -= Math.pow(2, 8 * byteLength)
+
+  return val
 }
 
 Buffer.prototype.readInt8 = function (offset, noAssert) {
@@ -975,8 +1068,40 @@ Buffer.prototype.readDoubleBE = function (offset, noAssert) {
 
 function checkInt (buf, value, offset, ext, max, min) {
   if (!Buffer.isBuffer(buf)) throw new TypeError('buffer must be a Buffer instance')
-  if (value > max || value < min) throw new TypeError('value is out of bounds')
-  if (offset + ext > buf.length) throw new TypeError('index out of range')
+  if (value > max || value < min) throw new RangeError('value is out of bounds')
+  if (offset + ext > buf.length) throw new RangeError('index out of range')
+}
+
+Buffer.prototype.writeUIntLE = function (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert)
+    checkInt(this, value, offset, byteLength, Math.pow(2, 8 * byteLength), 0)
+
+  var mul = 1
+  var i = 0
+  this[offset] = value & 0xFF
+  while (++i < byteLength && (mul *= 0x100))
+    this[offset + i] = (value / mul) >>> 0 & 0xFF
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeUIntBE = function (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert)
+    checkInt(this, value, offset, byteLength, Math.pow(2, 8 * byteLength), 0)
+
+  var i = byteLength - 1
+  var mul = 1
+  this[offset + i] = value & 0xFF
+  while (--i >= 0 && (mul *= 0x100))
+    this[offset + i] = (value / mul) >>> 0 & 0xFF
+
+  return offset + byteLength
 }
 
 Buffer.prototype.writeUInt8 = function (value, offset, noAssert) {
@@ -1056,6 +1181,50 @@ Buffer.prototype.writeUInt32BE = function (value, offset, noAssert) {
   return offset + 4
 }
 
+Buffer.prototype.writeIntLE = function (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) {
+    checkInt(this,
+             value,
+             offset,
+             byteLength,
+             Math.pow(2, 8 * byteLength - 1) - 1,
+             -Math.pow(2, 8 * byteLength - 1))
+  }
+
+  var i = 0
+  var mul = 1
+  var sub = value < 0 ? 1 : 0
+  this[offset] = value & 0xFF
+  while (++i < byteLength && (mul *= 0x100))
+    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeIntBE = function (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) {
+    checkInt(this,
+             value,
+             offset,
+             byteLength,
+             Math.pow(2, 8 * byteLength - 1) - 1,
+             -Math.pow(2, 8 * byteLength - 1))
+  }
+
+  var i = byteLength - 1
+  var mul = 1
+  var sub = value < 0 ? 1 : 0
+  this[offset + i] = value & 0xFF
+  while (--i >= 0 && (mul *= 0x100))
+    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
+
+  return offset + byteLength
+}
+
 Buffer.prototype.writeInt8 = function (value, offset, noAssert) {
   value = +value
   offset = offset >>> 0
@@ -1121,8 +1290,9 @@ Buffer.prototype.writeInt32BE = function (value, offset, noAssert) {
 }
 
 function checkIEEE754 (buf, value, offset, ext, max, min) {
-  if (value > max || value < min) throw new TypeError('value is out of bounds')
-  if (offset + ext > buf.length) throw new TypeError('index out of range')
+  if (value > max || value < min) throw new RangeError('value is out of bounds')
+  if (offset + ext > buf.length) throw new RangeError('index out of range')
+  if (offset < 0) throw new RangeError('index out of range')
 }
 
 function writeFloat (buf, value, offset, littleEndian, noAssert) {
@@ -1161,18 +1331,19 @@ Buffer.prototype.copy = function (target, target_start, start, end) {
 
   if (!start) start = 0
   if (!end && end !== 0) end = this.length
+  if (target_start >= target.length) target_start = target.length
   if (!target_start) target_start = 0
+  if (end > 0 && end < start) end = start
 
   // Copy 0 bytes; we're done
-  if (end === start) return
-  if (target.length === 0 || source.length === 0) return
+  if (end === start) return 0
+  if (target.length === 0 || source.length === 0) return 0
 
   // Fatal error conditions
-  if (end < start) throw new TypeError('sourceEnd < sourceStart')
-  if (target_start < 0 || target_start >= target.length)
-    throw new TypeError('targetStart out of bounds')
-  if (start < 0 || start >= source.length) throw new TypeError('sourceStart out of bounds')
-  if (end < 0 || end > source.length) throw new TypeError('sourceEnd out of bounds')
+  if (target_start < 0)
+    throw new RangeError('targetStart out of bounds')
+  if (start < 0 || start >= source.length) throw new RangeError('sourceStart out of bounds')
+  if (end < 0) throw new RangeError('sourceEnd out of bounds')
 
   // Are we oob?
   if (end > this.length)
@@ -1189,6 +1360,8 @@ Buffer.prototype.copy = function (target, target_start, start, end) {
   } else {
     target._set(this.subarray(start, start + len), target_start)
   }
+
+  return len
 }
 
 // fill(value, start=0, end=buffer.length)
@@ -1197,14 +1370,14 @@ Buffer.prototype.fill = function (value, start, end) {
   if (!start) start = 0
   if (!end) end = this.length
 
-  if (end < start) throw new TypeError('end < start')
+  if (end < start) throw new RangeError('end < start')
 
   // Fill 0 bytes; we're done
   if (end === start) return
   if (this.length === 0) return
 
-  if (start < 0 || start >= this.length) throw new TypeError('start out of bounds')
-  if (end < 0 || end > this.length) throw new TypeError('end out of bounds')
+  if (start < 0 || start >= this.length) throw new RangeError('start out of bounds')
+  if (end < 0 || end > this.length) throw new RangeError('end out of bounds')
 
   var i
   if (typeof value === 'number') {
@@ -1270,11 +1443,15 @@ Buffer._augment = function (arr) {
   arr.compare = BP.compare
   arr.copy = BP.copy
   arr.slice = BP.slice
+  arr.readUIntLE = BP.readUIntLE
+  arr.readUIntBE = BP.readUIntBE
   arr.readUInt8 = BP.readUInt8
   arr.readUInt16LE = BP.readUInt16LE
   arr.readUInt16BE = BP.readUInt16BE
   arr.readUInt32LE = BP.readUInt32LE
   arr.readUInt32BE = BP.readUInt32BE
+  arr.readIntLE = BP.readIntLE
+  arr.readIntBE = BP.readIntBE
   arr.readInt8 = BP.readInt8
   arr.readInt16LE = BP.readInt16LE
   arr.readInt16BE = BP.readInt16BE
@@ -1285,10 +1462,14 @@ Buffer._augment = function (arr) {
   arr.readDoubleLE = BP.readDoubleLE
   arr.readDoubleBE = BP.readDoubleBE
   arr.writeUInt8 = BP.writeUInt8
+  arr.writeUIntLE = BP.writeUIntLE
+  arr.writeUIntBE = BP.writeUIntBE
   arr.writeUInt16LE = BP.writeUInt16LE
   arr.writeUInt16BE = BP.writeUInt16BE
   arr.writeUInt32LE = BP.writeUInt32LE
   arr.writeUInt32BE = BP.writeUInt32BE
+  arr.writeIntLE = BP.writeIntLE
+  arr.writeIntBE = BP.writeIntBE
   arr.writeInt8 = BP.writeInt8
   arr.writeInt16LE = BP.writeInt16LE
   arr.writeInt16BE = BP.writeInt16BE
@@ -1305,11 +1486,13 @@ Buffer._augment = function (arr) {
   return arr
 }
 
-var INVALID_BASE64_RE = /[^+\/0-9A-z]/g
+var INVALID_BASE64_RE = /[^+\/0-9A-z\-]/g
 
 function base64clean (str) {
   // Node strips out invalid characters like \n and \t from the string, base64-js does not
   str = stringtrim(str).replace(INVALID_BASE64_RE, '')
+  // Node converts strings with length < 2 to ''
+  if (str.length < 2) return ''
   // Node allows for non-padded base64 strings (missing trailing ===), base64-js does not
   while (str.length % 4 !== 0) {
     str = str + '='
@@ -1333,22 +1516,100 @@ function toHex (n) {
   return n.toString(16)
 }
 
-function utf8ToBytes (str) {
-  var byteArray = []
-  for (var i = 0; i < str.length; i++) {
-    var b = str.charCodeAt(i)
-    if (b <= 0x7F) {
-      byteArray.push(b)
-    } else {
-      var start = i
-      if (b >= 0xD800 && b <= 0xDFFF) i++
-      var h = encodeURIComponent(str.slice(start, i+1)).substr(1).split('%')
-      for (var j = 0; j < h.length; j++) {
-        byteArray.push(parseInt(h[j], 16))
+function utf8ToBytes(string, units) {
+  var codePoint, length = string.length
+  var leadSurrogate = null
+  units = units || Infinity
+  var bytes = []
+  var i = 0
+
+  for (; i<length; i++) {
+    codePoint = string.charCodeAt(i)
+
+    // is surrogate component
+    if (codePoint > 0xD7FF && codePoint < 0xE000) {
+
+      // last char was a lead
+      if (leadSurrogate) {
+
+        // 2 leads in a row
+        if (codePoint < 0xDC00) {
+          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+          leadSurrogate = codePoint
+          continue
+        }
+
+        // valid surrogate pair
+        else {
+          codePoint = leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00 | 0x10000
+          leadSurrogate = null
+        }
+      }
+
+      // no lead yet
+      else {
+
+        // unexpected trail
+        if (codePoint > 0xDBFF) {
+          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+          continue
+        }
+
+        // unpaired lead
+        else if (i + 1 === length) {
+          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+          continue
+        }
+
+        // valid lead
+        else {
+          leadSurrogate = codePoint
+          continue
+        }
       }
     }
+
+    // valid bmp char, but last char was a lead
+    else if (leadSurrogate) {
+      if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+      leadSurrogate = null
+    }
+
+    // encode utf8
+    if (codePoint < 0x80) {
+      if ((units -= 1) < 0) break
+      bytes.push(codePoint)
+    }
+    else if (codePoint < 0x800) {
+      if ((units -= 2) < 0) break
+      bytes.push(
+        codePoint >> 0x6 | 0xC0,
+        codePoint & 0x3F | 0x80
+      );
+    }
+    else if (codePoint < 0x10000) {
+      if ((units -= 3) < 0) break
+      bytes.push(
+        codePoint >> 0xC | 0xE0,
+        codePoint >> 0x6 & 0x3F | 0x80,
+        codePoint & 0x3F | 0x80
+      );
+    }
+    else if (codePoint < 0x200000) {
+      if ((units -= 4) < 0) break
+      bytes.push(
+        codePoint >> 0x12 | 0xF0,
+        codePoint >> 0xC & 0x3F | 0x80,
+        codePoint >> 0x6 & 0x3F | 0x80,
+        codePoint & 0x3F | 0x80
+      );
+    }
+    else {
+      throw new Error('Invalid code point')
+    }
   }
-  return byteArray
+
+  return bytes
 }
 
 function asciiToBytes (str) {
@@ -1360,10 +1621,13 @@ function asciiToBytes (str) {
   return byteArray
 }
 
-function utf16leToBytes (str) {
+function utf16leToBytes (str, units) {
   var c, hi, lo
   var byteArray = []
   for (var i = 0; i < str.length; i++) {
+
+    if ((units -= 2) < 0) break
+
     c = str.charCodeAt(i)
     hi = c >> 8
     lo = c % 256
@@ -1375,7 +1639,7 @@ function utf16leToBytes (str) {
 }
 
 function base64ToBytes (str) {
-  return base64.toByteArray(str)
+  return base64.toByteArray(base64clean(str))
 }
 
 function blitBuffer (src, dst, offset, length, unitSize) {
@@ -1396,7 +1660,7 @@ function decodeUtf8Char (str) {
   }
 }
 
-},{"base64-js":3,"ieee754":4,"is-array":5}],3:[function(_dereq_,module,exports){
+},{}],3:[function(_dereq_,module,exports){
 var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 ;(function (exports) {
@@ -1411,12 +1675,16 @@ var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 	var NUMBER = '0'.charCodeAt(0)
 	var LOWER  = 'a'.charCodeAt(0)
 	var UPPER  = 'A'.charCodeAt(0)
+	var PLUS_URL_SAFE = '-'.charCodeAt(0)
+	var SLASH_URL_SAFE = '_'.charCodeAt(0)
 
 	function decode (elt) {
 		var code = elt.charCodeAt(0)
-		if (code === PLUS)
+		if (code === PLUS ||
+		    code === PLUS_URL_SAFE)
 			return 62 // '+'
-		if (code === SLASH)
+		if (code === SLASH ||
+		    code === SLASH_URL_SAFE)
 			return 63 // '/'
 		if (code < NUMBER)
 			return -1 //no match
@@ -1866,74 +2134,44 @@ var substr = 'ab'.substr(-1) === 'b'
     }
 ;
 
-}).call(this,_dereq_('_process'))
-},{"_process":7}],7:[function(_dereq_,module,exports){
+}).call(this,_dereq_(7))
+},{}],7:[function(_dereq_,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
+var queue = [];
+var draining = false;
 
-process.nextTick = (function () {
-    var canSetImmediate = typeof window !== 'undefined'
-    && window.setImmediate;
-    var canMutationObserver = typeof window !== 'undefined'
-    && window.MutationObserver;
-    var canPost = typeof window !== 'undefined'
-    && window.postMessage && window.addEventListener
-    ;
-
-    if (canSetImmediate) {
-        return function (f) { return window.setImmediate(f) };
+function drainQueue() {
+    if (draining) {
+        return;
     }
-
-    var queue = [];
-
-    if (canMutationObserver) {
-        var hiddenDiv = document.createElement("div");
-        var observer = new MutationObserver(function () {
-            var queueList = queue.slice();
-            queue.length = 0;
-            queueList.forEach(function (fn) {
-                fn();
-            });
-        });
-
-        observer.observe(hiddenDiv, { attributes: true });
-
-        return function nextTick(fn) {
-            if (!queue.length) {
-                hiddenDiv.setAttribute('yes', 'no');
-            }
-            queue.push(fn);
-        };
+    draining = true;
+    var currentQueue;
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        var i = -1;
+        while (++i < len) {
+            currentQueue[i]();
+        }
+        len = queue.length;
     }
-
-    if (canPost) {
-        window.addEventListener('message', function (ev) {
-            var source = ev.source;
-            if ((source === window || source === null) && ev.data === 'process-tick') {
-                ev.stopPropagation();
-                if (queue.length > 0) {
-                    var fn = queue.shift();
-                    fn();
-                }
-            }
-        }, true);
-
-        return function nextTick(fn) {
-            queue.push(fn);
-            window.postMessage('process-tick', '*');
-        };
+    draining = false;
+}
+process.nextTick = function (fun) {
+    queue.push(fun);
+    if (!draining) {
+        setTimeout(drainQueue, 0);
     }
-
-    return function nextTick(fn) {
-        setTimeout(fn, 0);
-    };
-})();
+};
 
 process.title = 'browser';
 process.browser = true;
 process.env = {};
 process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
 
 function noop() {}
 
@@ -1954,6 +2192,7 @@ process.cwd = function () { return '/' };
 process.chdir = function (dir) {
     throw new Error('process.chdir is not supported');
 };
+process.umask = function() { return 0; };
 
 },{}],8:[function(_dereq_,module,exports){
 var Base62 = (function (my) {
@@ -9607,11 +9846,11 @@ parseYieldExpression: true, parseAwaitExpression: true
  * Licensed under the New BSD license. See LICENSE.txt or:
  * http://opensource.org/licenses/BSD-3-Clause
  */
-exports.SourceMapGenerator = _dereq_('./source-map/source-map-generator').SourceMapGenerator;
-exports.SourceMapConsumer = _dereq_('./source-map/source-map-consumer').SourceMapConsumer;
-exports.SourceNode = _dereq_('./source-map/source-node').SourceNode;
+exports.SourceMapGenerator = _dereq_(16).SourceMapGenerator;
+exports.SourceMapConsumer = _dereq_(15).SourceMapConsumer;
+exports.SourceNode = _dereq_(17).SourceNode;
 
-},{"./source-map/source-map-consumer":15,"./source-map/source-map-generator":16,"./source-map/source-node":17}],11:[function(_dereq_,module,exports){
+},{}],11:[function(_dereq_,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -9619,11 +9858,11 @@ exports.SourceNode = _dereq_('./source-map/source-node').SourceNode;
  * http://opensource.org/licenses/BSD-3-Clause
  */
 if (typeof define !== 'function') {
-    var define = _dereq_('amdefine')(module, _dereq_);
+    var define = _dereq_(19)(module, _dereq_);
 }
 define(function (_dereq_, exports, module) {
 
-  var util = _dereq_('./util');
+  var util = _dereq_(18);
 
   /**
    * A data structure which is a combination of an array and a set. Adding a new
@@ -9710,7 +9949,7 @@ define(function (_dereq_, exports, module) {
 
 });
 
-},{"./util":18,"amdefine":19}],12:[function(_dereq_,module,exports){
+},{}],12:[function(_dereq_,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -9748,11 +9987,11 @@ define(function (_dereq_, exports, module) {
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 if (typeof define !== 'function') {
-    var define = _dereq_('amdefine')(module, _dereq_);
+    var define = _dereq_(19)(module, _dereq_);
 }
 define(function (_dereq_, exports, module) {
 
-  var base64 = _dereq_('./base64');
+  var base64 = _dereq_(13);
 
   // A single base 64 digit can contain 6 bits of data. For the base 64 variable
   // length quantities we use in the source map spec, the first bit is the sign,
@@ -9856,7 +10095,7 @@ define(function (_dereq_, exports, module) {
 
 });
 
-},{"./base64":13,"amdefine":19}],13:[function(_dereq_,module,exports){
+},{}],13:[function(_dereq_,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -9864,7 +10103,7 @@ define(function (_dereq_, exports, module) {
  * http://opensource.org/licenses/BSD-3-Clause
  */
 if (typeof define !== 'function') {
-    var define = _dereq_('amdefine')(module, _dereq_);
+    var define = _dereq_(19)(module, _dereq_);
 }
 define(function (_dereq_, exports, module) {
 
@@ -9900,7 +10139,7 @@ define(function (_dereq_, exports, module) {
 
 });
 
-},{"amdefine":19}],14:[function(_dereq_,module,exports){
+},{}],14:[function(_dereq_,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -9908,7 +10147,7 @@ define(function (_dereq_, exports, module) {
  * http://opensource.org/licenses/BSD-3-Clause
  */
 if (typeof define !== 'function') {
-    var define = _dereq_('amdefine')(module, _dereq_);
+    var define = _dereq_(19)(module, _dereq_);
 }
 define(function (_dereq_, exports, module) {
 
@@ -9983,7 +10222,7 @@ define(function (_dereq_, exports, module) {
 
 });
 
-},{"amdefine":19}],15:[function(_dereq_,module,exports){
+},{}],15:[function(_dereq_,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -9991,14 +10230,14 @@ define(function (_dereq_, exports, module) {
  * http://opensource.org/licenses/BSD-3-Clause
  */
 if (typeof define !== 'function') {
-    var define = _dereq_('amdefine')(module, _dereq_);
+    var define = _dereq_(19)(module, _dereq_);
 }
 define(function (_dereq_, exports, module) {
 
-  var util = _dereq_('./util');
-  var binarySearch = _dereq_('./binary-search');
-  var ArraySet = _dereq_('./array-set').ArraySet;
-  var base64VLQ = _dereq_('./base64-vlq');
+  var util = _dereq_(18);
+  var binarySearch = _dereq_(14);
+  var ArraySet = _dereq_(11).ArraySet;
+  var base64VLQ = _dereq_(12);
 
   /**
    * A SourceMapConsumer instance represents a parsed source map which we can
@@ -10462,7 +10701,7 @@ define(function (_dereq_, exports, module) {
 
 });
 
-},{"./array-set":11,"./base64-vlq":12,"./binary-search":14,"./util":18,"amdefine":19}],16:[function(_dereq_,module,exports){
+},{}],16:[function(_dereq_,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -10470,13 +10709,13 @@ define(function (_dereq_, exports, module) {
  * http://opensource.org/licenses/BSD-3-Clause
  */
 if (typeof define !== 'function') {
-    var define = _dereq_('amdefine')(module, _dereq_);
+    var define = _dereq_(19)(module, _dereq_);
 }
 define(function (_dereq_, exports, module) {
 
-  var base64VLQ = _dereq_('./base64-vlq');
-  var util = _dereq_('./util');
-  var ArraySet = _dereq_('./array-set').ArraySet;
+  var base64VLQ = _dereq_(12);
+  var util = _dereq_(18);
+  var ArraySet = _dereq_(11).ArraySet;
 
   /**
    * An instance of the SourceMapGenerator represents a source map which is
@@ -10844,7 +11083,7 @@ define(function (_dereq_, exports, module) {
 
 });
 
-},{"./array-set":11,"./base64-vlq":12,"./util":18,"amdefine":19}],17:[function(_dereq_,module,exports){
+},{}],17:[function(_dereq_,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -10852,12 +11091,12 @@ define(function (_dereq_, exports, module) {
  * http://opensource.org/licenses/BSD-3-Clause
  */
 if (typeof define !== 'function') {
-    var define = _dereq_('amdefine')(module, _dereq_);
+    var define = _dereq_(19)(module, _dereq_);
 }
 define(function (_dereq_, exports, module) {
 
-  var SourceMapGenerator = _dereq_('./source-map-generator').SourceMapGenerator;
-  var util = _dereq_('./util');
+  var SourceMapGenerator = _dereq_(16).SourceMapGenerator;
+  var util = _dereq_(18);
 
   /**
    * SourceNodes provide a way to abstract over interpolating/concatenating
@@ -11217,7 +11456,7 @@ define(function (_dereq_, exports, module) {
 
 });
 
-},{"./source-map-generator":16,"./util":18,"amdefine":19}],18:[function(_dereq_,module,exports){
+},{}],18:[function(_dereq_,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -11225,7 +11464,7 @@ define(function (_dereq_, exports, module) {
  * http://opensource.org/licenses/BSD-3-Clause
  */
 if (typeof define !== 'function') {
-    var define = _dereq_('amdefine')(module, _dereq_);
+    var define = _dereq_(19)(module, _dereq_);
 }
 define(function (_dereq_, exports, module) {
 
@@ -11424,7 +11663,7 @@ define(function (_dereq_, exports, module) {
 
 });
 
-},{"amdefine":19}],19:[function(_dereq_,module,exports){
+},{}],19:[function(_dereq_,module,exports){
 (function (process,__filename){
 /** vim: et:ts=4:sw=4:sts=4
  * @license amdefine 0.1.0 Copyright (c) 2011, The Dojo Foundation All Rights Reserved.
@@ -11451,7 +11690,7 @@ function amdefine(module, requireFn) {
     var defineCache = {},
         loaderCache = {},
         alreadyCalled = false,
-        path = _dereq_('path'),
+        path = _dereq_(6),
         makeRequire, stringRequire;
 
     /**
@@ -11726,8 +11965,8 @@ function amdefine(module, requireFn) {
 
 module.exports = amdefine;
 
-}).call(this,_dereq_('_process'),"/node_modules/jstransform/node_modules/source-map/node_modules/amdefine/amdefine.js")
-},{"_process":7,"path":6}],20:[function(_dereq_,module,exports){
+}).call(this,_dereq_(7),"/node_modules/jstransform/node_modules/source-map/node_modules/amdefine/amdefine.js")
+},{}],20:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -11836,8 +12075,8 @@ exports.parseAsObject = parseAsObject;
 /*jslint node: true*/
 "use strict";
 
-var esprima = _dereq_('esprima-fb');
-var utils = _dereq_('./utils');
+var esprima = _dereq_(9);
+var utils = _dereq_(22);
 
 var getBoundaryNode = utils.getBoundaryNode;
 var declareIdentInScope = utils.declareIdentInLocalScope;
@@ -12052,7 +12291,7 @@ function transform(visitors, source, options) {
   state.g.visitors = visitors;
 
   if (options.sourceMap) {
-    var SourceMapGenerator = _dereq_('source-map').SourceMapGenerator;
+    var SourceMapGenerator = _dereq_(10).SourceMapGenerator;
     state.g.sourceMap = new SourceMapGenerator({file: options.filename || 'transformed.js'});
   }
 
@@ -12070,7 +12309,7 @@ function transform(visitors, source, options) {
 exports.transform = transform;
 exports.Syntax = Syntax;
 
-},{"./utils":22,"esprima-fb":9,"source-map":10}],22:[function(_dereq_,module,exports){
+},{}],22:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -12089,7 +12328,7 @@ exports.Syntax = Syntax;
 
 
 /*jslint node: true*/
-var Syntax = _dereq_('esprima-fb').Syntax;
+var Syntax = _dereq_(9).Syntax;
 var leadingIndentRegexp = /(^|\n)( {2}|\t)/g;
 var nonWhiteRegexp = /(\S)/g;
 
@@ -12478,7 +12717,7 @@ function indentBefore(start, state) {
 
 function getDocblock(state) {
   if (!state.g.docblock) {
-    var docblock = _dereq_('./docblock');
+    var docblock = _dereq_(20);
     state.g.docblock =
       docblock.parseAsObject(docblock.extract(state.g.source));
   }
@@ -12693,7 +12932,7 @@ exports.getNodeSourceText = getNodeSourceText;
 exports.getTempVar = getTempVar;
 exports.getTempVarWithValue = getTempVarWithValue;
 
-},{"./docblock":20,"esprima-fb":9}],23:[function(_dereq_,module,exports){
+},{}],23:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -12734,11 +12973,11 @@ exports.getTempVarWithValue = getTempVarWithValue;
  * }.bind(this));
  *
  */
-var restParamVisitors = _dereq_('./es6-rest-param-visitors');
-var destructuringVisitors = _dereq_('./es6-destructuring-visitors');
+var restParamVisitors = _dereq_(28);
+var destructuringVisitors = _dereq_(25);
 
-var Syntax = _dereq_('esprima-fb').Syntax;
-var utils = _dereq_('../src/utils');
+var Syntax = _dereq_(9).Syntax;
+var utils = _dereq_(22);
 
 /**
  * @public
@@ -12853,7 +13092,7 @@ exports.visitorList = [
 ];
 
 
-},{"../src/utils":22,"./es6-destructuring-visitors":25,"./es6-rest-param-visitors":28,"esprima-fb":9}],24:[function(_dereq_,module,exports){
+},{}],24:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -12877,10 +13116,10 @@ exports.visitorList = [
  */
 'use strict';
 
-var base62 = _dereq_('base62');
-var Syntax = _dereq_('esprima-fb').Syntax;
-var utils = _dereq_('../src/utils');
-var reservedWordsHelper = _dereq_('./reserved-words-helper');
+var base62 = _dereq_(8);
+var Syntax = _dereq_(9).Syntax;
+var utils = _dereq_(22);
+var reservedWordsHelper = _dereq_(32);
 
 var declareIdentInLocalScope = utils.declareIdentInLocalScope;
 var initScopeMetadata = utils.initScopeMetadata;
@@ -13422,7 +13661,7 @@ exports.visitorList = [
   visitSuperMemberExpression
 ];
 
-},{"../src/utils":22,"./reserved-words-helper":32,"base62":8,"esprima-fb":9}],25:[function(_dereq_,module,exports){
+},{}],25:[function(_dereq_,module,exports){
 /**
  * Copyright 2014 Facebook, Inc.
  *
@@ -13462,12 +13701,12 @@ exports.visitorList = [
  * var x, $__0 = init({ip, port}), ip = $__0.ip, port = $__0.port;
  *
  */
-var Syntax = _dereq_('esprima-fb').Syntax;
-var utils = _dereq_('../src/utils');
+var Syntax = _dereq_(9).Syntax;
+var utils = _dereq_(22);
 
-var reservedWordsHelper = _dereq_('./reserved-words-helper');
-var restParamVisitors = _dereq_('./es6-rest-param-visitors');
-var restPropertyHelpers = _dereq_('./es7-rest-property-helpers');
+var reservedWordsHelper = _dereq_(32);
+var restParamVisitors = _dereq_(28);
+var restPropertyHelpers = _dereq_(30);
 
 // -------------------------------------------------------
 // 1. Structured variable declarations.
@@ -13704,7 +13943,7 @@ exports.visitorList = [
 exports.renderDestructuredComponents = renderDestructuredComponents;
 
 
-},{"../src/utils":22,"./es6-rest-param-visitors":28,"./es7-rest-property-helpers":30,"./reserved-words-helper":32,"esprima-fb":9}],26:[function(_dereq_,module,exports){
+},{}],26:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -13736,9 +13975,9 @@ exports.renderDestructuredComponents = renderDestructuredComponents;
  *
  */
 
-var Syntax = _dereq_('esprima-fb').Syntax;
-var utils = _dereq_('../src/utils');
-var reservedWordsHelper = _dereq_('./reserved-words-helper');
+var Syntax = _dereq_(9).Syntax;
+var utils = _dereq_(22);
+var reservedWordsHelper = _dereq_(32);
 
 function visitObjectConciseMethod(traverse, node, path, state) {
   var isGenerator = node.value.generator;
@@ -13775,7 +14014,7 @@ exports.visitorList = [
   visitObjectConciseMethod
 ];
 
-},{"../src/utils":22,"./reserved-words-helper":32,"esprima-fb":9}],27:[function(_dereq_,module,exports){
+},{}],27:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -13806,8 +14045,8 @@ exports.visitorList = [
  * function init({port, ip, coords: {x, y}}) { ... }
  *
  */
-var Syntax = _dereq_('esprima-fb').Syntax;
-var utils = _dereq_('../src/utils');
+var Syntax = _dereq_(9).Syntax;
+var utils = _dereq_(22);
 
 /**
  * @public
@@ -13830,7 +14069,7 @@ exports.visitorList = [
 ];
 
 
-},{"../src/utils":22,"esprima-fb":9}],28:[function(_dereq_,module,exports){
+},{}],28:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -13866,8 +14105,8 @@ exports.visitorList = [
  * }
  *
  */
-var Syntax = _dereq_('esprima-fb').Syntax;
-var utils = _dereq_('../src/utils');
+var Syntax = _dereq_(9).Syntax;
+var utils = _dereq_(22);
 
 
 
@@ -13938,7 +14177,7 @@ exports.visitorList = [
   visitFunctionBodyWithRestParam
 ];
 
-},{"../src/utils":22,"esprima-fb":9}],29:[function(_dereq_,module,exports){
+},{}],29:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -13962,8 +14201,8 @@ exports.visitorList = [
  */
 'use strict';
 
-var Syntax = _dereq_('esprima-fb').Syntax;
-var utils = _dereq_('../src/utils');
+var Syntax = _dereq_(9).Syntax;
+var utils = _dereq_(22);
 
 /**
  * http://people.mozilla.org/~jorendorff/es6-draft.html#sec-12.1.9
@@ -14096,7 +14335,7 @@ exports.visitorList = [
   visitTaggedTemplateExpression
 ];
 
-},{"../src/utils":22,"esprima-fb":9}],30:[function(_dereq_,module,exports){
+},{}],30:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -14119,8 +14358,8 @@ exports.visitorList = [
  * Desugars ES7 rest properties into ES5 object iteration.
  */
 
-var Syntax = _dereq_('esprima-fb').Syntax;
-var utils = _dereq_('../src/utils');
+var Syntax = _dereq_(9).Syntax;
+var utils = _dereq_(22);
 
 // TODO: This is a pretty massive helper, it should only be defined once, in the
 // transform's runtime environment. We don't currently have a runtime though.
@@ -14179,7 +14418,7 @@ function renderRestExpression(accessorExpression, excludedProperties) {
 
 exports.renderRestExpression = renderRestExpression;
 
-},{"../src/utils":22,"esprima-fb":9}],31:[function(_dereq_,module,exports){
+},{}],31:[function(_dereq_,module,exports){
 /**
  * Copyright 2004-present Facebook. All Rights Reserved.
  */
@@ -14195,8 +14434,8 @@ exports.renderRestExpression = renderRestExpression;
  *
  */
 
-var Syntax = _dereq_('esprima-fb').Syntax;
-var utils = _dereq_('../src/utils');
+var Syntax = _dereq_(9).Syntax;
+var utils = _dereq_(22);
 
 function visitObjectLiteralSpread(traverse, node, path, state) {
   utils.catchup(node.range[0], state);
@@ -14289,7 +14528,7 @@ exports.visitorList = [
   visitObjectLiteralSpread
 ];
 
-},{"../src/utils":22,"esprima-fb":9}],32:[function(_dereq_,module,exports){
+},{}],32:[function(_dereq_,module,exports){
 /**
  * Copyright 2014 Facebook, Inc.
  *
@@ -14341,8 +14580,8 @@ exports.isReservedWord = function(word) {
 };
 
 },{}],33:[function(_dereq_,module,exports){
-var esprima = _dereq_('esprima-fb');
-var utils = _dereq_('../src/utils');
+var esprima = _dereq_(9);
+var utils = _dereq_(22);
 
 var Syntax = esprima.Syntax;
 
@@ -14489,7 +14728,7 @@ exports.visitorList = [
   visitTypeAnnotatedObjectOrArrayPattern
 ];
 
-},{"../src/utils":22,"esprima-fb":9}],34:[function(_dereq_,module,exports){
+},{}],34:[function(_dereq_,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -14501,16 +14740,15 @@ exports.visitorList = [
 /*global exports:true*/
 "use strict";
 
-var Syntax = _dereq_('jstransform').Syntax;
-var utils = _dereq_('jstransform/src/utils');
+var Syntax = _dereq_(21).Syntax;
+var utils = _dereq_(22);
 
-var FALLBACK_TAGS = _dereq_('./xjs').knownTags;
 var renderXJSExpressionContainer =
-  _dereq_('./xjs').renderXJSExpressionContainer;
-var renderXJSLiteral = _dereq_('./xjs').renderXJSLiteral;
-var quoteAttrName = _dereq_('./xjs').quoteAttrName;
+  _dereq_(36).renderXJSExpressionContainer;
+var renderXJSLiteral = _dereq_(36).renderXJSLiteral;
+var quoteAttrName = _dereq_(36).quoteAttrName;
 
-var trimLeft = _dereq_('./xjs').trimLeft;
+var trimLeft = _dereq_(36).trimLeft;
 
 /**
  * Customized desugar processor for React JSX. Currently:
@@ -14550,17 +14788,8 @@ function visitReactTag(traverse, object, path, state) {
   // We assume that the React runtime is already in scope
   utils.append('React.createElement(', state);
 
-  // Identifiers with lower case or hypthens are fallback tags (strings).
   // XJSMemberExpressions are not.
   if (nameObject.type === Syntax.XJSIdentifier && isTagName(nameObject.name)) {
-    // This is a temporary error message to assist upgrades
-    if (!FALLBACK_TAGS.hasOwnProperty(nameObject.name)) {
-      throw new Error(
-        'Lower case component names (' + nameObject.name + ') are no longer ' +
-        'supported in JSX: See http://fb.me/react-jsx-lower-case'
-      );
-    }
-
     utils.append('"' + nameObject.name + '"', state);
     utils.move(nameObject.range[1], state);
   } else {
@@ -14744,7 +14973,7 @@ exports.visitorList = [
   visitReactTag
 ];
 
-},{"./xjs":36,"jstransform":21,"jstransform/src/utils":22}],35:[function(_dereq_,module,exports){
+},{}],35:[function(_dereq_,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -14756,8 +14985,8 @@ exports.visitorList = [
 /*global exports:true*/
 "use strict";
 
-var Syntax = _dereq_('jstransform').Syntax;
-var utils = _dereq_('jstransform/src/utils');
+var Syntax = _dereq_(21).Syntax;
+var utils = _dereq_(22);
 
 function addDisplayName(displayName, object, state) {
   if (object &&
@@ -14839,7 +15068,7 @@ exports.visitorList = [
   visitReactDisplayName
 ];
 
-},{"jstransform":21,"jstransform/src/utils":22}],36:[function(_dereq_,module,exports){
+},{}],36:[function(_dereq_,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -14850,144 +15079,8 @@ exports.visitorList = [
  */
 /*global exports:true*/
 "use strict";
-var Syntax = _dereq_('jstransform').Syntax;
-var utils = _dereq_('jstransform/src/utils');
-
-var knownTags = {
-  a: true,
-  abbr: true,
-  address: true,
-  applet: true,
-  area: true,
-  article: true,
-  aside: true,
-  audio: true,
-  b: true,
-  base: true,
-  bdi: true,
-  bdo: true,
-  big: true,
-  blockquote: true,
-  body: true,
-  br: true,
-  button: true,
-  canvas: true,
-  caption: true,
-  circle: true,
-  cite: true,
-  code: true,
-  col: true,
-  colgroup: true,
-  command: true,
-  data: true,
-  datalist: true,
-  dd: true,
-  defs: true,
-  del: true,
-  details: true,
-  dfn: true,
-  dialog: true,
-  div: true,
-  dl: true,
-  dt: true,
-  ellipse: true,
-  em: true,
-  embed: true,
-  fieldset: true,
-  figcaption: true,
-  figure: true,
-  footer: true,
-  form: true,
-  g: true,
-  h1: true,
-  h2: true,
-  h3: true,
-  h4: true,
-  h5: true,
-  h6: true,
-  head: true,
-  header: true,
-  hgroup: true,
-  hr: true,
-  html: true,
-  i: true,
-  iframe: true,
-  img: true,
-  input: true,
-  ins: true,
-  kbd: true,
-  keygen: true,
-  label: true,
-  legend: true,
-  li: true,
-  line: true,
-  linearGradient: true,
-  link: true,
-  main: true,
-  map: true,
-  mark: true,
-  marquee: true,
-  mask: false,
-  menu: true,
-  menuitem: true,
-  meta: true,
-  meter: true,
-  nav: true,
-  noscript: true,
-  object: true,
-  ol: true,
-  optgroup: true,
-  option: true,
-  output: true,
-  p: true,
-  param: true,
-  path: true,
-  pattern: false,
-  picture: true,
-  polygon: true,
-  polyline: true,
-  pre: true,
-  progress: true,
-  q: true,
-  radialGradient: true,
-  rect: true,
-  rp: true,
-  rt: true,
-  ruby: true,
-  s: true,
-  samp: true,
-  script: true,
-  section: true,
-  select: true,
-  small: true,
-  source: true,
-  span: true,
-  stop: true,
-  strong: true,
-  style: true,
-  sub: true,
-  summary: true,
-  sup: true,
-  svg: true,
-  table: true,
-  tbody: true,
-  td: true,
-  text: true,
-  textarea: true,
-  tfoot: true,
-  th: true,
-  thead: true,
-  time: true,
-  title: true,
-  tr: true,
-  track: true,
-  tspan: true,
-  u: true,
-  ul: true,
-  'var': true,
-  video: true,
-  wbr: true
-};
+var Syntax = _dereq_(21).Syntax;
+var utils = _dereq_(22);
 
 function renderXJSLiteral(object, isLast, state, start, end) {
   var lines = object.value.split(/\r\n|\n|\r/);
@@ -15083,24 +15176,23 @@ function trimLeft(value) {
   return value.replace(/^[ ]+/, '');
 }
 
-exports.knownTags = knownTags;
 exports.renderXJSExpressionContainer = renderXJSExpressionContainer;
 exports.renderXJSLiteral = renderXJSLiteral;
 exports.quoteAttrName = quoteAttrName;
 exports.trimLeft = trimLeft;
 
-},{"jstransform":21,"jstransform/src/utils":22}],37:[function(_dereq_,module,exports){
+},{}],37:[function(_dereq_,module,exports){
 /*global exports:true*/
-var es6ArrowFunctions = _dereq_('jstransform/visitors/es6-arrow-function-visitors');
-var es6Classes = _dereq_('jstransform/visitors/es6-class-visitors');
-var es6Destructuring = _dereq_('jstransform/visitors/es6-destructuring-visitors');
-var es6ObjectConciseMethod = _dereq_('jstransform/visitors/es6-object-concise-method-visitors');
-var es6ObjectShortNotation = _dereq_('jstransform/visitors/es6-object-short-notation-visitors');
-var es6RestParameters = _dereq_('jstransform/visitors/es6-rest-param-visitors');
-var es6Templates = _dereq_('jstransform/visitors/es6-template-visitors');
-var es7SpreadProperty = _dereq_('jstransform/visitors/es7-spread-property-visitors');
-var react = _dereq_('./transforms/react');
-var reactDisplayName = _dereq_('./transforms/reactDisplayName');
+var es6ArrowFunctions = _dereq_(23);
+var es6Classes = _dereq_(24);
+var es6Destructuring = _dereq_(25);
+var es6ObjectConciseMethod = _dereq_(26);
+var es6ObjectShortNotation = _dereq_(27);
+var es6RestParameters = _dereq_(28);
+var es6Templates = _dereq_(29);
+var es7SpreadProperty = _dereq_(31);
+var react = _dereq_(34);
+var reactDisplayName = _dereq_(35);
 
 /**
  * Map from transformName => orderedListOfVisitors.
@@ -15197,5 +15289,5 @@ exports.getVisitorsBySet = getVisitorsBySet;
 exports.getAllVisitors = getAllVisitors;
 exports.transformVisitors = transformVisitors;
 
-},{"./transforms/react":34,"./transforms/reactDisplayName":35,"jstransform/visitors/es6-arrow-function-visitors":23,"jstransform/visitors/es6-class-visitors":24,"jstransform/visitors/es6-destructuring-visitors":25,"jstransform/visitors/es6-object-concise-method-visitors":26,"jstransform/visitors/es6-object-short-notation-visitors":27,"jstransform/visitors/es6-rest-param-visitors":28,"jstransform/visitors/es6-template-visitors":29,"jstransform/visitors/es7-spread-property-visitors":31}]},{},[1])(1)
+},{}]},{},[1])(1)
 });
