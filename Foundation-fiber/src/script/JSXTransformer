@@ -1,5 +1,5 @@
 /**
- * JSXTransformer v0.13.0-alpha.2
+ * JSXTransformer v0.13.0-beta.1
  */
 !function(e){if("object"==typeof exports&&"undefined"!=typeof module)module.exports=e();else if("function"==typeof define&&define.amd)define([],e);else{var f;"undefined"!=typeof window?f=window:"undefined"!=typeof global?f=global:"undefined"!=typeof self&&(f=self),f.JSXTransformer=e()}}(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
 /**
@@ -15,10 +15,10 @@
 
 'use strict';
 
-var buffer = _dereq_(2);
-var transform = _dereq_(21).transform;
-var typesSyntax = _dereq_(33);
-var visitors = _dereq_(37);
+var buffer = _dereq_('buffer');
+var transform = _dereq_('jstransform').transform;
+var typesSyntax = _dereq_('jstransform/visitors/type-syntax');
+var visitors = _dereq_('./fbtransform/visitors');
 
 var headEl;
 var dummyAnchor;
@@ -86,6 +86,13 @@ function exec(source, options) {
  */
 function createSourceCodeErrorMessage(code, e) {
   var sourceLines = code.split('\n');
+  // e.lineNumber is non-standard so we can't depend on its availability. If
+  // we're in a browser where it isn't supported, don't even bother trying to
+  // format anything. We may also hit a case where the line number is reported
+  // incorrectly and is outside the bounds of the actual code. Handle that too.
+  if (!e.lineNumber || e.lineNumber > sourceLines.length) {
+    return '';
+  }
   var erroneousLine = sourceLines[e.lineNumber - 1];
 
   // Removes any leading indenting spaces and gets the number of
@@ -134,7 +141,7 @@ function transformCode(code, url, options) {
         // The error will correctly point to `url` in Firefox.
         e.fileName = url;
       }
-      e.message += url + ':' + e.lineNumber + ':' + e.column;
+      e.message += url + ':' + e.lineNumber + ':' + e.columnNumber;
     } else {
       e.message += location.href;
     }
@@ -342,7 +349,7 @@ module.exports = {
   exec: exec
 };
 
-},{}],2:[function(_dereq_,module,exports){
+},{"./fbtransform/visitors":37,"buffer":2,"jstransform":21,"jstransform/visitors/type-syntax":33}],2:[function(_dereq_,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -350,9 +357,9 @@ module.exports = {
  * @license  MIT
  */
 
-var base64 = _dereq_(3)
-var ieee754 = _dereq_(4)
-var isArray = _dereq_(5)
+var base64 = _dereq_('base64-js')
+var ieee754 = _dereq_('ieee754')
+var isArray = _dereq_('is-array')
 
 exports.Buffer = Buffer
 exports.SlowBuffer = SlowBuffer
@@ -1660,7 +1667,7 @@ function decodeUtf8Char (str) {
   }
 }
 
-},{}],3:[function(_dereq_,module,exports){
+},{"base64-js":3,"ieee754":4,"is-array":5}],3:[function(_dereq_,module,exports){
 var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 ;(function (exports) {
@@ -2134,8 +2141,8 @@ var substr = 'ab'.substr(-1) === 'b'
     }
 ;
 
-}).call(this,_dereq_(7))
-},{}],7:[function(_dereq_,module,exports){
+}).call(this,_dereq_('_process'))
+},{"_process":7}],7:[function(_dereq_,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -9846,11 +9853,11 @@ parseYieldExpression: true, parseAwaitExpression: true
  * Licensed under the New BSD license. See LICENSE.txt or:
  * http://opensource.org/licenses/BSD-3-Clause
  */
-exports.SourceMapGenerator = _dereq_(16).SourceMapGenerator;
-exports.SourceMapConsumer = _dereq_(15).SourceMapConsumer;
-exports.SourceNode = _dereq_(17).SourceNode;
+exports.SourceMapGenerator = _dereq_('./source-map/source-map-generator').SourceMapGenerator;
+exports.SourceMapConsumer = _dereq_('./source-map/source-map-consumer').SourceMapConsumer;
+exports.SourceNode = _dereq_('./source-map/source-node').SourceNode;
 
-},{}],11:[function(_dereq_,module,exports){
+},{"./source-map/source-map-consumer":15,"./source-map/source-map-generator":16,"./source-map/source-node":17}],11:[function(_dereq_,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -9858,11 +9865,11 @@ exports.SourceNode = _dereq_(17).SourceNode;
  * http://opensource.org/licenses/BSD-3-Clause
  */
 if (typeof define !== 'function') {
-    var define = _dereq_(19)(module, _dereq_);
+    var define = _dereq_('amdefine')(module, _dereq_);
 }
 define(function (_dereq_, exports, module) {
 
-  var util = _dereq_(18);
+  var util = _dereq_('./util');
 
   /**
    * A data structure which is a combination of an array and a set. Adding a new
@@ -9949,7 +9956,7 @@ define(function (_dereq_, exports, module) {
 
 });
 
-},{}],12:[function(_dereq_,module,exports){
+},{"./util":18,"amdefine":19}],12:[function(_dereq_,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -9987,11 +9994,11 @@ define(function (_dereq_, exports, module) {
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 if (typeof define !== 'function') {
-    var define = _dereq_(19)(module, _dereq_);
+    var define = _dereq_('amdefine')(module, _dereq_);
 }
 define(function (_dereq_, exports, module) {
 
-  var base64 = _dereq_(13);
+  var base64 = _dereq_('./base64');
 
   // A single base 64 digit can contain 6 bits of data. For the base 64 variable
   // length quantities we use in the source map spec, the first bit is the sign,
@@ -10095,7 +10102,7 @@ define(function (_dereq_, exports, module) {
 
 });
 
-},{}],13:[function(_dereq_,module,exports){
+},{"./base64":13,"amdefine":19}],13:[function(_dereq_,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -10103,7 +10110,7 @@ define(function (_dereq_, exports, module) {
  * http://opensource.org/licenses/BSD-3-Clause
  */
 if (typeof define !== 'function') {
-    var define = _dereq_(19)(module, _dereq_);
+    var define = _dereq_('amdefine')(module, _dereq_);
 }
 define(function (_dereq_, exports, module) {
 
@@ -10139,7 +10146,7 @@ define(function (_dereq_, exports, module) {
 
 });
 
-},{}],14:[function(_dereq_,module,exports){
+},{"amdefine":19}],14:[function(_dereq_,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -10147,7 +10154,7 @@ define(function (_dereq_, exports, module) {
  * http://opensource.org/licenses/BSD-3-Clause
  */
 if (typeof define !== 'function') {
-    var define = _dereq_(19)(module, _dereq_);
+    var define = _dereq_('amdefine')(module, _dereq_);
 }
 define(function (_dereq_, exports, module) {
 
@@ -10222,7 +10229,7 @@ define(function (_dereq_, exports, module) {
 
 });
 
-},{}],15:[function(_dereq_,module,exports){
+},{"amdefine":19}],15:[function(_dereq_,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -10230,14 +10237,14 @@ define(function (_dereq_, exports, module) {
  * http://opensource.org/licenses/BSD-3-Clause
  */
 if (typeof define !== 'function') {
-    var define = _dereq_(19)(module, _dereq_);
+    var define = _dereq_('amdefine')(module, _dereq_);
 }
 define(function (_dereq_, exports, module) {
 
-  var util = _dereq_(18);
-  var binarySearch = _dereq_(14);
-  var ArraySet = _dereq_(11).ArraySet;
-  var base64VLQ = _dereq_(12);
+  var util = _dereq_('./util');
+  var binarySearch = _dereq_('./binary-search');
+  var ArraySet = _dereq_('./array-set').ArraySet;
+  var base64VLQ = _dereq_('./base64-vlq');
 
   /**
    * A SourceMapConsumer instance represents a parsed source map which we can
@@ -10701,7 +10708,7 @@ define(function (_dereq_, exports, module) {
 
 });
 
-},{}],16:[function(_dereq_,module,exports){
+},{"./array-set":11,"./base64-vlq":12,"./binary-search":14,"./util":18,"amdefine":19}],16:[function(_dereq_,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -10709,13 +10716,13 @@ define(function (_dereq_, exports, module) {
  * http://opensource.org/licenses/BSD-3-Clause
  */
 if (typeof define !== 'function') {
-    var define = _dereq_(19)(module, _dereq_);
+    var define = _dereq_('amdefine')(module, _dereq_);
 }
 define(function (_dereq_, exports, module) {
 
-  var base64VLQ = _dereq_(12);
-  var util = _dereq_(18);
-  var ArraySet = _dereq_(11).ArraySet;
+  var base64VLQ = _dereq_('./base64-vlq');
+  var util = _dereq_('./util');
+  var ArraySet = _dereq_('./array-set').ArraySet;
 
   /**
    * An instance of the SourceMapGenerator represents a source map which is
@@ -11083,7 +11090,7 @@ define(function (_dereq_, exports, module) {
 
 });
 
-},{}],17:[function(_dereq_,module,exports){
+},{"./array-set":11,"./base64-vlq":12,"./util":18,"amdefine":19}],17:[function(_dereq_,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -11091,12 +11098,12 @@ define(function (_dereq_, exports, module) {
  * http://opensource.org/licenses/BSD-3-Clause
  */
 if (typeof define !== 'function') {
-    var define = _dereq_(19)(module, _dereq_);
+    var define = _dereq_('amdefine')(module, _dereq_);
 }
 define(function (_dereq_, exports, module) {
 
-  var SourceMapGenerator = _dereq_(16).SourceMapGenerator;
-  var util = _dereq_(18);
+  var SourceMapGenerator = _dereq_('./source-map-generator').SourceMapGenerator;
+  var util = _dereq_('./util');
 
   /**
    * SourceNodes provide a way to abstract over interpolating/concatenating
@@ -11456,7 +11463,7 @@ define(function (_dereq_, exports, module) {
 
 });
 
-},{}],18:[function(_dereq_,module,exports){
+},{"./source-map-generator":16,"./util":18,"amdefine":19}],18:[function(_dereq_,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -11464,7 +11471,7 @@ define(function (_dereq_, exports, module) {
  * http://opensource.org/licenses/BSD-3-Clause
  */
 if (typeof define !== 'function') {
-    var define = _dereq_(19)(module, _dereq_);
+    var define = _dereq_('amdefine')(module, _dereq_);
 }
 define(function (_dereq_, exports, module) {
 
@@ -11663,7 +11670,7 @@ define(function (_dereq_, exports, module) {
 
 });
 
-},{}],19:[function(_dereq_,module,exports){
+},{"amdefine":19}],19:[function(_dereq_,module,exports){
 (function (process,__filename){
 /** vim: et:ts=4:sw=4:sts=4
  * @license amdefine 0.1.0 Copyright (c) 2011, The Dojo Foundation All Rights Reserved.
@@ -11690,7 +11697,7 @@ function amdefine(module, requireFn) {
     var defineCache = {},
         loaderCache = {},
         alreadyCalled = false,
-        path = _dereq_(6),
+        path = _dereq_('path'),
         makeRequire, stringRequire;
 
     /**
@@ -11965,8 +11972,8 @@ function amdefine(module, requireFn) {
 
 module.exports = amdefine;
 
-}).call(this,_dereq_(7),"/node_modules/jstransform/node_modules/source-map/node_modules/amdefine/amdefine.js")
-},{}],20:[function(_dereq_,module,exports){
+}).call(this,_dereq_('_process'),"/node_modules/jstransform/node_modules/source-map/node_modules/amdefine/amdefine.js")
+},{"_process":7,"path":6}],20:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -12075,8 +12082,8 @@ exports.parseAsObject = parseAsObject;
 /*jslint node: true*/
 "use strict";
 
-var esprima = _dereq_(9);
-var utils = _dereq_(22);
+var esprima = _dereq_('esprima-fb');
+var utils = _dereq_('./utils');
 
 var getBoundaryNode = utils.getBoundaryNode;
 var declareIdentInScope = utils.declareIdentInLocalScope;
@@ -12291,7 +12298,7 @@ function transform(visitors, source, options) {
   state.g.visitors = visitors;
 
   if (options.sourceMap) {
-    var SourceMapGenerator = _dereq_(10).SourceMapGenerator;
+    var SourceMapGenerator = _dereq_('source-map').SourceMapGenerator;
     state.g.sourceMap = new SourceMapGenerator({file: options.filename || 'transformed.js'});
   }
 
@@ -12309,7 +12316,7 @@ function transform(visitors, source, options) {
 exports.transform = transform;
 exports.Syntax = Syntax;
 
-},{}],22:[function(_dereq_,module,exports){
+},{"./utils":22,"esprima-fb":9,"source-map":10}],22:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -12328,7 +12335,7 @@ exports.Syntax = Syntax;
 
 
 /*jslint node: true*/
-var Syntax = _dereq_(9).Syntax;
+var Syntax = _dereq_('esprima-fb').Syntax;
 var leadingIndentRegexp = /(^|\n)( {2}|\t)/g;
 var nonWhiteRegexp = /(\S)/g;
 
@@ -12717,7 +12724,7 @@ function indentBefore(start, state) {
 
 function getDocblock(state) {
   if (!state.g.docblock) {
-    var docblock = _dereq_(20);
+    var docblock = _dereq_('./docblock');
     state.g.docblock =
       docblock.parseAsObject(docblock.extract(state.g.source));
   }
@@ -12932,7 +12939,7 @@ exports.getNodeSourceText = getNodeSourceText;
 exports.getTempVar = getTempVar;
 exports.getTempVarWithValue = getTempVarWithValue;
 
-},{}],23:[function(_dereq_,module,exports){
+},{"./docblock":20,"esprima-fb":9}],23:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -12973,11 +12980,11 @@ exports.getTempVarWithValue = getTempVarWithValue;
  * }.bind(this));
  *
  */
-var restParamVisitors = _dereq_(28);
-var destructuringVisitors = _dereq_(25);
+var restParamVisitors = _dereq_('./es6-rest-param-visitors');
+var destructuringVisitors = _dereq_('./es6-destructuring-visitors');
 
-var Syntax = _dereq_(9).Syntax;
-var utils = _dereq_(22);
+var Syntax = _dereq_('esprima-fb').Syntax;
+var utils = _dereq_('../src/utils');
 
 /**
  * @public
@@ -13092,7 +13099,7 @@ exports.visitorList = [
 ];
 
 
-},{}],24:[function(_dereq_,module,exports){
+},{"../src/utils":22,"./es6-destructuring-visitors":25,"./es6-rest-param-visitors":28,"esprima-fb":9}],24:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -13116,10 +13123,10 @@ exports.visitorList = [
  */
 'use strict';
 
-var base62 = _dereq_(8);
-var Syntax = _dereq_(9).Syntax;
-var utils = _dereq_(22);
-var reservedWordsHelper = _dereq_(32);
+var base62 = _dereq_('base62');
+var Syntax = _dereq_('esprima-fb').Syntax;
+var utils = _dereq_('../src/utils');
+var reservedWordsHelper = _dereq_('./reserved-words-helper');
 
 var declareIdentInLocalScope = utils.declareIdentInLocalScope;
 var initScopeMetadata = utils.initScopeMetadata;
@@ -13661,7 +13668,7 @@ exports.visitorList = [
   visitSuperMemberExpression
 ];
 
-},{}],25:[function(_dereq_,module,exports){
+},{"../src/utils":22,"./reserved-words-helper":32,"base62":8,"esprima-fb":9}],25:[function(_dereq_,module,exports){
 /**
  * Copyright 2014 Facebook, Inc.
  *
@@ -13701,12 +13708,12 @@ exports.visitorList = [
  * var x, $__0 = init({ip, port}), ip = $__0.ip, port = $__0.port;
  *
  */
-var Syntax = _dereq_(9).Syntax;
-var utils = _dereq_(22);
+var Syntax = _dereq_('esprima-fb').Syntax;
+var utils = _dereq_('../src/utils');
 
-var reservedWordsHelper = _dereq_(32);
-var restParamVisitors = _dereq_(28);
-var restPropertyHelpers = _dereq_(30);
+var reservedWordsHelper = _dereq_('./reserved-words-helper');
+var restParamVisitors = _dereq_('./es6-rest-param-visitors');
+var restPropertyHelpers = _dereq_('./es7-rest-property-helpers');
 
 // -------------------------------------------------------
 // 1. Structured variable declarations.
@@ -13943,7 +13950,7 @@ exports.visitorList = [
 exports.renderDestructuredComponents = renderDestructuredComponents;
 
 
-},{}],26:[function(_dereq_,module,exports){
+},{"../src/utils":22,"./es6-rest-param-visitors":28,"./es7-rest-property-helpers":30,"./reserved-words-helper":32,"esprima-fb":9}],26:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -13975,9 +13982,9 @@ exports.renderDestructuredComponents = renderDestructuredComponents;
  *
  */
 
-var Syntax = _dereq_(9).Syntax;
-var utils = _dereq_(22);
-var reservedWordsHelper = _dereq_(32);
+var Syntax = _dereq_('esprima-fb').Syntax;
+var utils = _dereq_('../src/utils');
+var reservedWordsHelper = _dereq_('./reserved-words-helper');
 
 function visitObjectConciseMethod(traverse, node, path, state) {
   var isGenerator = node.value.generator;
@@ -14014,7 +14021,7 @@ exports.visitorList = [
   visitObjectConciseMethod
 ];
 
-},{}],27:[function(_dereq_,module,exports){
+},{"../src/utils":22,"./reserved-words-helper":32,"esprima-fb":9}],27:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -14045,8 +14052,8 @@ exports.visitorList = [
  * function init({port, ip, coords: {x, y}}) { ... }
  *
  */
-var Syntax = _dereq_(9).Syntax;
-var utils = _dereq_(22);
+var Syntax = _dereq_('esprima-fb').Syntax;
+var utils = _dereq_('../src/utils');
 
 /**
  * @public
@@ -14069,7 +14076,7 @@ exports.visitorList = [
 ];
 
 
-},{}],28:[function(_dereq_,module,exports){
+},{"../src/utils":22,"esprima-fb":9}],28:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -14105,8 +14112,8 @@ exports.visitorList = [
  * }
  *
  */
-var Syntax = _dereq_(9).Syntax;
-var utils = _dereq_(22);
+var Syntax = _dereq_('esprima-fb').Syntax;
+var utils = _dereq_('../src/utils');
 
 
 
@@ -14177,7 +14184,7 @@ exports.visitorList = [
   visitFunctionBodyWithRestParam
 ];
 
-},{}],29:[function(_dereq_,module,exports){
+},{"../src/utils":22,"esprima-fb":9}],29:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -14201,8 +14208,8 @@ exports.visitorList = [
  */
 'use strict';
 
-var Syntax = _dereq_(9).Syntax;
-var utils = _dereq_(22);
+var Syntax = _dereq_('esprima-fb').Syntax;
+var utils = _dereq_('../src/utils');
 
 /**
  * http://people.mozilla.org/~jorendorff/es6-draft.html#sec-12.1.9
@@ -14335,7 +14342,7 @@ exports.visitorList = [
   visitTaggedTemplateExpression
 ];
 
-},{}],30:[function(_dereq_,module,exports){
+},{"../src/utils":22,"esprima-fb":9}],30:[function(_dereq_,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  *
@@ -14358,8 +14365,8 @@ exports.visitorList = [
  * Desugars ES7 rest properties into ES5 object iteration.
  */
 
-var Syntax = _dereq_(9).Syntax;
-var utils = _dereq_(22);
+var Syntax = _dereq_('esprima-fb').Syntax;
+var utils = _dereq_('../src/utils');
 
 // TODO: This is a pretty massive helper, it should only be defined once, in the
 // transform's runtime environment. We don't currently have a runtime though.
@@ -14418,7 +14425,7 @@ function renderRestExpression(accessorExpression, excludedProperties) {
 
 exports.renderRestExpression = renderRestExpression;
 
-},{}],31:[function(_dereq_,module,exports){
+},{"../src/utils":22,"esprima-fb":9}],31:[function(_dereq_,module,exports){
 /**
  * Copyright 2004-present Facebook. All Rights Reserved.
  */
@@ -14434,8 +14441,8 @@ exports.renderRestExpression = renderRestExpression;
  *
  */
 
-var Syntax = _dereq_(9).Syntax;
-var utils = _dereq_(22);
+var Syntax = _dereq_('esprima-fb').Syntax;
+var utils = _dereq_('../src/utils');
 
 function visitObjectLiteralSpread(traverse, node, path, state) {
   utils.catchup(node.range[0], state);
@@ -14528,7 +14535,7 @@ exports.visitorList = [
   visitObjectLiteralSpread
 ];
 
-},{}],32:[function(_dereq_,module,exports){
+},{"../src/utils":22,"esprima-fb":9}],32:[function(_dereq_,module,exports){
 /**
  * Copyright 2014 Facebook, Inc.
  *
@@ -14580,8 +14587,8 @@ exports.isReservedWord = function(word) {
 };
 
 },{}],33:[function(_dereq_,module,exports){
-var esprima = _dereq_(9);
-var utils = _dereq_(22);
+var esprima = _dereq_('esprima-fb');
+var utils = _dereq_('../src/utils');
 
 var Syntax = esprima.Syntax;
 
@@ -14728,7 +14735,7 @@ exports.visitorList = [
   visitTypeAnnotatedObjectOrArrayPattern
 ];
 
-},{}],34:[function(_dereq_,module,exports){
+},{"../src/utils":22,"esprima-fb":9}],34:[function(_dereq_,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -14740,15 +14747,15 @@ exports.visitorList = [
 /*global exports:true*/
 "use strict";
 
-var Syntax = _dereq_(21).Syntax;
-var utils = _dereq_(22);
+var Syntax = _dereq_('jstransform').Syntax;
+var utils = _dereq_('jstransform/src/utils');
 
 var renderXJSExpressionContainer =
-  _dereq_(36).renderXJSExpressionContainer;
-var renderXJSLiteral = _dereq_(36).renderXJSLiteral;
-var quoteAttrName = _dereq_(36).quoteAttrName;
+  _dereq_('./xjs').renderXJSExpressionContainer;
+var renderXJSLiteral = _dereq_('./xjs').renderXJSLiteral;
+var quoteAttrName = _dereq_('./xjs').quoteAttrName;
 
-var trimLeft = _dereq_(36).trimLeft;
+var trimLeft = _dereq_('./xjs').trimLeft;
 
 /**
  * Customized desugar processor for React JSX. Currently:
@@ -14973,7 +14980,7 @@ exports.visitorList = [
   visitReactTag
 ];
 
-},{}],35:[function(_dereq_,module,exports){
+},{"./xjs":36,"jstransform":21,"jstransform/src/utils":22}],35:[function(_dereq_,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -14985,8 +14992,8 @@ exports.visitorList = [
 /*global exports:true*/
 "use strict";
 
-var Syntax = _dereq_(21).Syntax;
-var utils = _dereq_(22);
+var Syntax = _dereq_('jstransform').Syntax;
+var utils = _dereq_('jstransform/src/utils');
 
 function addDisplayName(displayName, object, state) {
   if (object &&
@@ -15068,7 +15075,7 @@ exports.visitorList = [
   visitReactDisplayName
 ];
 
-},{}],36:[function(_dereq_,module,exports){
+},{"jstransform":21,"jstransform/src/utils":22}],36:[function(_dereq_,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -15079,8 +15086,8 @@ exports.visitorList = [
  */
 /*global exports:true*/
 "use strict";
-var Syntax = _dereq_(21).Syntax;
-var utils = _dereq_(22);
+var Syntax = _dereq_('jstransform').Syntax;
+var utils = _dereq_('jstransform/src/utils');
 
 function renderXJSLiteral(object, isLast, state, start, end) {
   var lines = object.value.split(/\r\n|\n|\r/);
@@ -15181,18 +15188,18 @@ exports.renderXJSLiteral = renderXJSLiteral;
 exports.quoteAttrName = quoteAttrName;
 exports.trimLeft = trimLeft;
 
-},{}],37:[function(_dereq_,module,exports){
+},{"jstransform":21,"jstransform/src/utils":22}],37:[function(_dereq_,module,exports){
 /*global exports:true*/
-var es6ArrowFunctions = _dereq_(23);
-var es6Classes = _dereq_(24);
-var es6Destructuring = _dereq_(25);
-var es6ObjectConciseMethod = _dereq_(26);
-var es6ObjectShortNotation = _dereq_(27);
-var es6RestParameters = _dereq_(28);
-var es6Templates = _dereq_(29);
-var es7SpreadProperty = _dereq_(31);
-var react = _dereq_(34);
-var reactDisplayName = _dereq_(35);
+var es6ArrowFunctions = _dereq_('jstransform/visitors/es6-arrow-function-visitors');
+var es6Classes = _dereq_('jstransform/visitors/es6-class-visitors');
+var es6Destructuring = _dereq_('jstransform/visitors/es6-destructuring-visitors');
+var es6ObjectConciseMethod = _dereq_('jstransform/visitors/es6-object-concise-method-visitors');
+var es6ObjectShortNotation = _dereq_('jstransform/visitors/es6-object-short-notation-visitors');
+var es6RestParameters = _dereq_('jstransform/visitors/es6-rest-param-visitors');
+var es6Templates = _dereq_('jstransform/visitors/es6-template-visitors');
+var es7SpreadProperty = _dereq_('jstransform/visitors/es7-spread-property-visitors');
+var react = _dereq_('./transforms/react');
+var reactDisplayName = _dereq_('./transforms/reactDisplayName');
 
 /**
  * Map from transformName => orderedListOfVisitors.
@@ -15289,5 +15296,5 @@ exports.getVisitorsBySet = getVisitorsBySet;
 exports.getAllVisitors = getAllVisitors;
 exports.transformVisitors = transformVisitors;
 
-},{}]},{},[1])(1)
+},{"./transforms/react":34,"./transforms/reactDisplayName":35,"jstransform/visitors/es6-arrow-function-visitors":23,"jstransform/visitors/es6-class-visitors":24,"jstransform/visitors/es6-destructuring-visitors":25,"jstransform/visitors/es6-object-concise-method-visitors":26,"jstransform/visitors/es6-object-short-notation-visitors":27,"jstransform/visitors/es6-rest-param-visitors":28,"jstransform/visitors/es6-template-visitors":29,"jstransform/visitors/es7-spread-property-visitors":31}]},{},[1])(1)
 });
