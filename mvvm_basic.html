@@ -33,7 +33,9 @@
       function hasPrefix(string, prefix) {
         return string.slice(0, prefix.length) === prefix
       }
-
+      function isNotFirefox() {
+        return /Firefox/.test(navigator.userAgent) === false;
+      }
       // 兼容性处理：如果不存在 Array.isArray 方法，则定义一个
       if (!Array.isArray) {
         Array.isArray = function (arg) {
@@ -241,13 +243,13 @@
             if (childNode.tagName === 'TEMPLATE') {
               slots[slotName] = childNode.content.cloneNode(true)
             } else {
-              console.log('Error: childNode is not a <template> element.')
+              isNotFirefox() && console.log('Error: childNode is not a <template> element.')
             }
           } else {
-            console.log('Error: childNode does not have a "v-slot" attribute.')
+            isNotFirefox() && console.log('Error: childNode does not have a "v-slot" attribute.')
           }
         } else {
-          console.log('Error: childNode is not an element node.')
+          isNotFirefox() && console.log('Error: childNode is not an element node.')
         }
       }
       function getSlotName(templateElement) {
@@ -356,7 +358,7 @@
                 } else {
                     // HTMLTemplateElement不存在，可以提供备选方案或警告用户
                     if (slotName) slots[slotName] = children[i].cloneNode(true)
-                    console.log('HTMLTemplateElement is not supported.' +  children[i].attributes);
+                    // isNotFirefox() && console.log('HTMLTemplateElement is not supported.' +  children[i].attributes);
                 }
               }
             }
@@ -430,7 +432,8 @@
                   return function (e) {
                     vm[exp] = e.target.value
                   }
-                })(exp)
+                })(exp),
+                false
               )
             } else if (attrName === 'v-for') {
               // 循环指令
@@ -505,7 +508,7 @@
         if (typeof vm[exp] === 'function') {
           node.addEventListener(eventType, function (e) {
             vm[exp](e)
-          })
+          }, false)
         } else {
           // console.error(`Error: ${exp} is not a function.`);
         }
@@ -623,13 +626,13 @@
           }
         },
         created: function () {
-          console.log('MyComponent created')
+          isNotFirefox() && console.log('MyComponent created')
         },
         mounted: function () {
-          console.log('MyComponent mounted')
+          isNotFirefox() && console.log('MyComponent mounted')
         },
         updated: function () {
-          console.log('MyComponent updated')
+          isNotFirefox() && console.log('MyComponent updated')
         },
         methods: {
           reverseMessage: function () {
@@ -650,7 +653,7 @@
             this.$set(this.items, 0, 'New Item' + new Date().getTime())
           },
           logMessage: function () {
-            console.log(this.message)
+            isNotFirefox() && console.log(this.message)
             alert(this.message)
           },
           toggleVisibility: function () {
